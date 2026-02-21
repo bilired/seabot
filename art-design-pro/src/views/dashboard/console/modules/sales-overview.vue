@@ -19,11 +19,13 @@
 </template>
 
 <script setup lang="ts">
+  import { onMounted, ref } from 'vue'
+  import { fetchSalesData } from '@/api/dashboard'
+
   /**
    * 访问量数据
-   * 记录从12天前到今天的访问量统计
    */
-  const data = [2, 3, 1, 4, 0, 6, 5,5, 4, 1, 1, 2]
+  const data = ref<number[]>([2, 3, 1, 4, 0, 6, 5, 5, 4, 1, 1, 2])
 
   /**
    * 生成日期标签 (从12天前开始到今天)
@@ -45,7 +47,27 @@
   }
 
   /**
-   * X 轴日期标签 (从12天前开始到今天)
+   * X 轴日期标签
    */
-  const xAxisData = generateDateLabels()
+  const xAxisData = ref<string[]>(generateDateLabels())
+
+  /**
+   * 从后端加载销售数据
+   */
+  const loadSalesData = async () => {
+    try {
+      const response = await fetchSalesData()
+      if (response.code === 200) {
+        const apiData = response.data
+        xAxisData.value = apiData.map(item => item.month)
+        data.value = apiData.map(item => item.sales)
+      }
+    } catch (error) {
+      console.error('加载销售数据失败:', error)
+    }
+  }
+
+  onMounted(() => {
+    loadSalesData()
+  })
 </script>

@@ -71,6 +71,7 @@
   import { useTable } from '@/hooks/core/useTable'
   import { ElTag, ElButton, ElSpace, ElMessage, ElMessageBox } from 'element-plus'
   import { Icon } from '@iconify/vue'
+  import { fetchDroneList, batchDeleteDrone } from '@/api/drone'
   import ControlDialog from './modules/control-dialog.vue'
   import TrackDialog from './modules/track-dialog.vue'
   import DeviceDetailModal from '@/views/dashboard/console/modules/device-detail.vue'
@@ -112,55 +113,6 @@
    */
   const getDeviceStatusConfig = (status: 'online' | 'offline') => {
     return DEVICE_STATUS_CONFIG[status] || { type: 'info' as const, text: '未知' }
-  }
-
-  /**
-   * 模拟获取无人船设备列表的API
-   */
-  const fetchDroneList = async (params: any) => {
-    // 模拟API延迟
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    // 模拟数据
-    const mockData: DroneItem[] = [
-      {
-        id: '20230810',
-        shipType: '大',
-        length: 111,
-        model: '111',
-        weight: 11,
-        functions: '1',
-        status: 'offline',
-        maxSpeed: 11
-      },
-      {
-        id: '4',
-        shipType: '双体',
-        length: 255,
-        model: 'DL-3026',
-        weight: 51,
-        functions: '图传、采样、营养盐监测',
-        status: 'offline',
-        maxSpeed: 14
-      },
-      {
-        id: '3',
-        shipType: '双体',
-        length: 220,
-        model: 'DL-3022',
-        weight: 44,
-        functions: '图传、采样、多参数水质监测',
-        status: 'offline',
-        maxSpeed: 12
-      }
-    ]
-
-    return {
-      records: mockData,
-      current: params.current || 1,
-      size: params.size || 10,
-      total: mockData.length
-    }
   }
 
   const {
@@ -343,15 +295,12 @@
         draggable: true
       }
     )
-      .then(() => {
-        // 模拟删除操作
-        setTimeout(() => {
-          ElMessage.success(`成功删除 ${count} 个设备`)
-          // 清空选中
-          selectedRows.value = []
-          // 刷新列表
-          refreshData()
-        }, 500)
+      .then(async () => {
+        const ids = selectedRows.value.map((item) => item.id)
+        await batchDeleteDrone({ ids })
+        ElMessage.success(`成功删除 ${count} 个设备`)
+        selectedRows.value = []
+        refreshData()
       })
       .catch(() => {
         ElMessage.info('已取消删除')

@@ -24,6 +24,9 @@
 </template>
 
 <script setup lang="ts">
+  import { onMounted, reactive } from 'vue'
+  import { fetchUserActivity } from '@/api/dashboard'
+
   interface ShipEventItem {
     shipName: string
     event: string
@@ -76,4 +79,23 @@
       description: 'GPS信号弱'
     }
   ])
+
+  /**
+   * 从后端加载用户活动（可选，保持原有数据显示）
+   */
+  const loadUserActivity = async () => {
+    try {
+      const response = await fetchUserActivity(8)
+      if (response.code === 200) {
+        // 可以选择用后端数据替换，或保持原有数据
+        console.log('后端活动数据:', response.data)
+      }
+    } catch (error) {
+      console.error('加载用户活动失败:', error)
+    }
+  }
+
+  onMounted(() => {
+    loadUserActivity()
+  })
 </script>

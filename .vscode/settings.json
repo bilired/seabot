@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^source /Users/hanksgao/Desktop/seabot/\\.venv/bin/activate && python3 /Users/hanksgao/Desktop/seabot/back-end/seadrone/manage\\.py makemigrations accounts && python3 /Users/hanksgao/Desktop/seabot/back-end/seadrone/manage\\.py migrate$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

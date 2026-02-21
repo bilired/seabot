@@ -24,6 +24,9 @@
 </template>
 
 <script setup lang="ts">
+  import { onMounted, reactive } from 'vue'
+  import { fetchDashboardStats } from '@/api/dashboard'
+
   interface CardDataItem {
     des: string
     icon: string
@@ -71,4 +74,27 @@
       change: '+30%'
     }
   ])
+
+  /**
+   * 从后端加载仪表板数据
+   */
+  const loadDashboardStats = async () => {
+    try {
+      const response = await fetchDashboardStats()
+      if (response.code === 200) {
+        const data = response.data
+        // 更新卡片数据（保持原有名称）
+        dataList[0].num = data.totalTasks
+        dataList[1].num = data.completedTasks
+        dataList[2].num = data.activeProjects
+        dataList[3].num = Math.round(data.totalSales)
+      }
+    } catch (error) {
+      console.error('加载仪表板数据失败:', error)
+    }
+  }
+
+  onMounted(() => {
+    loadDashboardStats()
+  })
 </script>

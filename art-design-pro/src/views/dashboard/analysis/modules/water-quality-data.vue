@@ -84,6 +84,9 @@
 </template>
 
 <script setup lang="ts">
+  import { onMounted, ref } from 'vue'
+  import { fetchWaterQualityData, fetchNutrientData } from '@/api/dashboard'
+
   interface WaterQualityDataItem {
     shipModel: string
     temperature: number
@@ -282,4 +285,37 @@
       connectionStatus: '在线'
     }
   ])
+
+  /**
+   * 从后端加载水质数据
+   */
+  const loadWaterQualityData = async () => {
+    try {
+      const response = await fetchWaterQualityData()
+      if (response.code === 200 && response.data.length > 0) {
+        waterQualityDataList.value = response.data
+      }
+    } catch (error) {
+      console.error('加载水质数据失败:', error)
+    }
+  }
+
+  /**
+   * 从后端加载营养盐数据
+   */
+  const loadNutrientData = async () => {
+    try {
+      const response = await fetchNutrientData()
+      if (response.code === 200 && response.data.length > 0) {
+        nutrientDataList.value = response.data
+      }
+    } catch (error) {
+      console.error('加载营养盐数据失败:', error)
+    }
+  }
+
+  onMounted(() => {
+    loadWaterQualityData()
+    loadNutrientData()
+  })
 </script>
