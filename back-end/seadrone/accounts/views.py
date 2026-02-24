@@ -197,26 +197,47 @@ class DashboardStatsView(APIView):
         获取仪表板统计数据
         
         返回数据包含：
-        - totalTasks: 总任务数
-        - completedTasks: 已完成任务数
-        - activeProjects: 活跃项目数
-        - totalSales: 总销售额
-        - newUsersCount: 新用户数
+        - onlineDevices: 在线设备数
+        - systemUptime: 系统运行时长（天）
+        - monthlyNewDevices: 本月新增设备数
+        - todayActivities: 今日动态数
         """
         try:
+            from datetime import datetime, timedelta
+            from django.utils import timezone
+            
+            # 统计在线设备数
+            online_devices = DroneDevice.objects.filter(status='online').count()
+            
+            # 计算系统运行时长（从第一个设备创建时间或用户注册时间开始计算）
+            first_device = DroneDevice.objects.order_by('created_at').first()
             user = request.user
-            stats, created = DashboardStats.objects.get_or_create(user=user)
+            
+            if first_device:
+                start_time = min(first_device.created_at, user.date_joined)
+            else:
+                start_time = user.date_joined
+            
+            now = timezone.now()
+            uptime_days = (now - start_time).days
+            
+            # 统计本月新增设备数
+            month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            monthly_new_devices = DroneDevice.objects.filter(created_at__gte=month_start).count()
+            
+            # 统计今日动态数
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            today_activities = UserActivity.objects.filter(created_at__gte=today_start).count()
             
             return Response({
                 "code": 200,
                 "msg": "获取成功",
                 "data": {
-                    "totalTasks": stats.total_tasks,
-                    "completedTasks": stats.completed_tasks,
-                    "activeProjects": stats.active_projects,
-                    "totalSales": float(stats.total_sales),
-                    "newUsersCount": stats.new_users_count,
-                    "updatedAt": stats.updated_at.isoformat()
+                    "onlineDevices": online_devices,
+                    "systemUptime": uptime_days,
+                    "monthlyNewDevices": monthly_new_devices,
+                    "todayActivities": today_activities,
+                    "updatedAt": now.isoformat()
                 }
             }, status=status.HTTP_200_OK)
         except Exception as e:
@@ -419,18 +440,26 @@ def get_sales_data(request):
     返回：月度销售数据
     """
     try:
-        user = request.user
-        stats = DashboardStats.objects.get(user=user)
+        from .models import MonthlySalesData
         
-        # 模拟月度销售数据
-        sales_data = [
-            {"month": "1月", "sales": 5000},
-            {"month": "2月", "sales": 6500},
-            {"month": "3月", "sales": 4500},
-            {"month": "4月", "sales": 7200},
-            {"month": "5月", "sales": 8100},
-            {"month": "6月", "sales": 9200},
-        ]
+        # 从数据库获取月度销售数据
+        sales_records = MonthlySalesData.objects.all()
+        
+        if not sales_records.exists():
+            # 如果数据库中没有数据，返回默认数据
+            sales_data = [
+                {"month": "1月", "sales": 5000},
+                {"month": "2月", "sales": 6500},
+                {"month": "3月", "sales": 4500},
+                {"month": "4月", "sales": 7200},
+                {"month": "5月", "sales": 8100},
+                {"month": "6月", "sales": 9200},
+            ]
+        else:
+            sales_data = [
+                {"month": item.month, "sales": item.sales}
+                for item in sales_records
+            ]
         
         return Response({
             "code": 200,
@@ -452,15 +481,30 @@ def get_user_growth(request):
     返回：用户数增长趋势
     """
     try:
-        # 模拟用户增长数据
-        growth_data = [
-            {"date": "2024-01-01", "newUsers": 50, "activeUsers": 300},
-            {"date": "2024-01-08", "newUsers": 65, "activeUsers": 350},
-            {"date": "2024-01-15", "newUsers": 45, "activeUsers": 380},
-            {"date": "2024-01-22", "newUsers": 80, "activeUsers": 420},
-            {"date": "2024-01-29", "newUsers": 95, "activeUsers": 480},
-            {"date": "2024-02-05", "newUsers": 70, "activeUsers": 530},
-        ]
+        from .models import UserGrowthData
+        
+        # 从数据库获取用户增长数据
+        growth_records = UserGrowthData.objects.all()
+        
+        if not growth_records.exists():
+            # 如果数据库中没有数据，返回默认数据
+            growth_data = [
+                {"date": "2024-01-01", "newUsers": 50, "activeUsers": 300},
+                {"date": "2024-01-08", "newUsers": 65, "activeUsers": 350},
+                {"date": "2024-01-15", "newUsers": 45, "activeUsers": 380},
+                {"date": "2024-01-22", "newUsers": 80, "activeUsers": 420},
+                {"date": "2024-01-29", "newUsers": 95, "activeUsers": 480},
+                {"date": "2024-02-05", "newUsers": 70, "activeUsers": 530},
+            ]
+        else:
+            growth_data = [
+                {
+                    "date": item.date.strftime('%Y-%m-%d'),
+                    "newUsers": item.new_users,
+                    "activeUsers": item.active_users
+                }
+                for item in growth_records
+            ]
         
         return Response({
             "code": 200,
@@ -474,227 +518,5 @@ def get_user_growth(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_water_quality_data(request):
-    """获取水质监测数据
-    
-    返回：水质数据列表
-    """
-    try:
-        from .models import WaterQualityData
-        
-        # 获取最新的20条数据
-        water_data = WaterQualityData.objects.all()[:20]
-        
-        data_list = []
-        for item in water_data:
-            data_list.append({
-                "shipModel": item.ship_model,
-                "temperature": item.temperature,
-                "ph": item.ph,
-                "chlorophyll": item.chlorophyll,
-                "salinity": item.salinity,
-                "dissolvedOxygen": item.dissolved_oxygen,
-                "conductivity": item.conductivity,
-                "turbidity": item.turbidity,
-                "algae": item.algae,
-                "warningCode": item.warning_code,
-                "collectionTime": item.collection_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "connectionStatus": item.connection_status
-            })
-        
-        return Response({
-            "code": 200,
-            "msg": "获取成功",
-            "data": data_list
-        }, status=status.HTTP_200_OK)
-    except Exception as e:
-        return Response({
-            "code": 500,
-            "msg": f"获取水质数据失败: {str(e)}"
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_nutrient_data(request):
-    """获取营养盐数据
-    
-    返回：营养盐数据列表
-    """
-    try:
-        from .models import NutrientData
-        
-        # 获取最新的20条数据
-        nutrient_data = NutrientData.objects.all()[:20]
-        
-        data_list = []
-        for item in nutrient_data:
-            data_list.append({
-                "shipModel": item.ship_model,
-                "phosphate": item.phosphate,
-                "phosphateTime": item.phosphate_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "ammonia": item.ammonia,
-                "ammoniaTime": item.ammonia_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "nitrate": item.nitrate,
-                "nitrateTime": item.nitrate_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "nitrite": item.nitrite,
-                "nitriteTime": item.nitrite_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "errorCode1": item.error_code1,
-                "errorCode2": item.error_code2,
-                "instrumentStatus": item.instrument_status,
-                "collectionTime": item.collection_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "connectionStatus": item.connection_status
-            })
-        
-        return Response({
-            "code": 200,
-            "msg": "获取成功",
-            "data": data_list
-        }, status=status.HTTP_200_OK)
-    except Exception as e:
-        return Response({
-            "code": 500,
-            "msg": f"获取营养盐数据失败: {str(e)}"
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(['POST'])
-@permission_classes([])  # 允许设备无需认证上传（或使用设备令牌）
-def upload_water_quality_data(request):
-    """无人船上传水质数据
-    
-    请求参数：
-    - shipModel: 船型号
-    - temperature: 水温
-    - ph: pH值
-    - chlorophyll: 叶绿素
-    - salinity: 盐度
-    - dissolvedOxygen: 溶解氧
-    - conductivity: 电导率
-    - turbidity: 浊度
-    - algae: 蓝绿藻
-    - warningCode: 警告码（可选）
-    """
-    try:
-        from .models import WaterQualityData
-        
-        # 获取数据
-        ship_model = request.data.get('shipModel')
-        temperature = request.data.get('temperature')
-        ph = request.data.get('ph')
-        chlorophyll = request.data.get('chlorophyll')
-        salinity = request.data.get('salinity')
-        dissolved_oxygen = request.data.get('dissolvedOxygen')
-        conductivity = request.data.get('conductivity')
-        turbidity = request.data.get('turbidity')
-        algae = request.data.get('algae')
-        warning_code = request.data.get('warningCode', '正常')
-        
-        # 验证必填字段
-        if not all([ship_model, temperature is not None, ph is not None]):
-            return Response({
-                "code": 400,
-                "msg": "缺少必填字段"
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # 创建数据记录
-        water_data = WaterQualityData.objects.create(
-            ship_model=ship_model,
-            temperature=float(temperature),
-            ph=float(ph),
-            chlorophyll=float(chlorophyll or 0),
-            salinity=float(salinity or 0),
-            dissolved_oxygen=float(dissolved_oxygen or 0),
-            conductivity=float(conductivity or 0),
-            turbidity=float(turbidity or 0),
-            algae=int(algae or 0),
-            warning_code=warning_code,
-            connection_status='在线'
-        )
-        
-        return Response({
-            "code": 200,
-            "msg": "数据上传成功",
-            "data": {
-                "id": water_data.id,
-                "collectionTime": water_data.collection_time.strftime('%Y-%m-%d %H:%M:%S')
-            }
-        }, status=status.HTTP_201_CREATED)
-        
-    except Exception as e:
-        return Response({
-            "code": 500,
-            "msg": f"数据上传失败: {str(e)}"
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(['POST'])
-@permission_classes([])  # 允许设备无需认证上传
-def upload_nutrient_data(request):
-    """无人船上传营养盐数据
-    
-    请求参数：
-    - shipModel: 船型号
-    - phosphate: 磷酸盐
-    - ammonia: 氨氮
-    - nitrate: 硝酸盐
-    - nitrite: 亚硝酸盐
-    - errorCode1, errorCode2: 错误码（可选）
-    - instrumentStatus: 仪器状态（可选）
-    """
-    try:
-        from .models import NutrientData
-        from django.utils import timezone
-        
-        # 获取数据
-        ship_model = request.data.get('shipModel')
-        phosphate = request.data.get('phosphate')
-        ammonia = request.data.get('ammonia')
-        nitrate = request.data.get('nitrate')
-        nitrite = request.data.get('nitrite')
-        error_code1 = request.data.get('errorCode1', '00')
-        error_code2 = request.data.get('errorCode2', '00')
-        instrument_status = request.data.get('instrumentStatus', '正常')
-        
-        # 验证必填字段
-        if not all([ship_model, phosphate is not None]):
-            return Response({
-                "code": 400,
-                "msg": "缺少必填字段"
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        now = timezone.now()
-        
-        # 创建数据记录
-        nutrient_data = NutrientData.objects.create(
-            ship_model=ship_model,
-            phosphate=float(phosphate),
-            phosphate_time=now,
-            ammonia=float(ammonia or 0),
-            ammonia_time=now,
-            nitrate=float(nitrate or 0),
-            nitrate_time=now,
-            nitrite=float(nitrite or 0),
-            nitrite_time=now,
-            error_code1=error_code1,
-            error_code2=error_code2,
-            instrument_status=instrument_status,
-            connection_status='在线'
-        )
-        
-        return Response({
-            "code": 200,
-            "msg": "数据上传成功",
-            "data": {
-                "id": nutrient_data.id,
-                "collectionTime": nutrient_data.collection_time.strftime('%Y-%m-%d %H:%M:%S')
-            }
-        }, status=status.HTTP_201_CREATED)
-        
-    except Exception as e:
-        return Response({
-            "code": 500,
-            "msg": f"数据上传失败: {str(e)}"
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

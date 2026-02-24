@@ -40,7 +40,8 @@ INSTALLED_APPS = [
     'rest_framework', # DRF
     'corsheaders',  # CORS 支持
     # 本地应用
-    'accounts', # 注册你的应用
+    'accounts', # 用户认证与仪表板
+    'monitoring', # 数据监测（水质、营养盐等）
 ]
 
 # =============== JWT 配置 ===============

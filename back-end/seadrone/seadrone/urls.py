@@ -20,5 +20,6 @@ from django.urls import path, include # 确保这里包含了 include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('accounts.urls')), # 所有 api 接口加 api/ 前缀
+    path('api/', include('accounts.urls')), # 用户认证与仪表板 API
+    path('api/', include('monitoring.urls')), # 数据监测 API
 ]

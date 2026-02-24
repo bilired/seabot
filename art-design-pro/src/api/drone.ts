@@ -1,4 +1,5 @@
 import request from '@/utils/http'
+import type { BaseResponse } from '@/types'
 
 export interface DroneItem {
   id: string
@@ -11,18 +12,22 @@ export interface DroneItem {
   maxSpeed: number
 }
 
-export interface DroneListResponse {
+export interface DroneListData {
   records: DroneItem[]
   current: number
   size: number
   total: number
 }
 
+export interface DroneListResponse extends BaseResponse {
+  data: DroneListData
+}
+
 export function fetchDroneList(params: { current: number; size: number; keyword?: string }) {
   return request.get<DroneListResponse>({
     url: '/api/drone/list/',
     params
-  })
+  }) as Promise<any>
 }
 
 export function createDrone(data: Omit<DroneItem, 'id'>) {

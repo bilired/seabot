@@ -291,9 +291,9 @@
    */
   const loadWaterQualityData = async () => {
     try {
-      const response = await fetchWaterQualityData()
-      if (response.code === 200 && response.data.length > 0) {
-        waterQualityDataList.value = response.data
+      const data = await fetchWaterQualityData()
+      if (data && Array.isArray(data) && data.length > 0) {
+        waterQualityDataList.value = data
       }
     } catch (error) {
       console.error('加载水质数据失败:', error)
@@ -305,9 +305,9 @@
    */
   const loadNutrientData = async () => {
     try {
-      const response = await fetchNutrientData()
-      if (response.code === 200 && response.data.length > 0) {
-        nutrientDataList.value = response.data
+      const data = await fetchNutrientData()
+      if (data && Array.isArray(data) && data.length > 0) {
+        nutrientDataList.value = data
       }
     } catch (error) {
       console.error('加载营养盐数据失败:', error)

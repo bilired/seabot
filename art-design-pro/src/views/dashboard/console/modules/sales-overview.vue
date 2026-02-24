@@ -56,9 +56,8 @@
    */
   const loadSalesData = async () => {
     try {
-      const response = await fetchSalesData()
-      if (response.code === 200) {
-        const apiData = response.data
+      const apiData = await fetchSalesData()
+      if (apiData && Array.isArray(apiData)) {
         xAxisData.value = apiData.map(item => item.month)
         data.value = apiData.map(item => item.sales)
       }

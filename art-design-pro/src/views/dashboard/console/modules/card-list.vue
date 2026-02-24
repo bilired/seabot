@@ -38,39 +38,39 @@
 
   /**
    * 卡片统计数据列表
-   * 展示总访问次数、在线访客数、点击量和新用户等核心数据指标
+   * 展示在线设备数、系统运行时长、月新增设备数和今日动态数等核心数据指标
    */
   const dataList = reactive<CardDataItem[]>([
     {
       des: '在线设备数',
-      icon: 'ri:group-line',
+      icon: 'ri:ship-line',
       startVal: 0,
       duration: 1000,
-      num: 30,
+      num: 0,
       change: '+20%'
     },
     {
-      des: '系统运行时长',
-      icon: 'ri:pie-chart-line',
+      des: '系统运行时长(天)',
+      icon: 'ri:time-line',
       startVal: 0,
       duration: 1000,
-      num: 182,
-      change: '+10%'
+      num: 0,
+      change: '+1天'
     },
     {
-      des: '月新增数据',
-      icon: 'ri:fire-line',
+      des: '月新增设备',
+      icon: 'ri:add-circle-line',
       startVal: 0,
       duration: 1000,
-      num: 9520,
-      change: '-12%'
+      num: 0,
+      change: '+12%'
     },
     {
       des: '今日动态数',
-      icon: 'ri:progress-2-line',
+      icon: 'ri:pulse-line',
       startVal: 0,
       duration: 1000,
-      num: 156,
+      num: 0,
       change: '+30%'
     }
   ])
@@ -80,14 +80,15 @@
    */
   const loadDashboardStats = async () => {
     try {
-      const response = await fetchDashboardStats()
-      if (response.code === 200) {
-        const data = response.data
-        // 更新卡片数据（保持原有名称）
-        dataList[0].num = data.totalTasks
-        dataList[1].num = data.completedTasks
-        dataList[2].num = data.activeProjects
-        dataList[3].num = Math.round(data.totalSales)
+      const data = await fetchDashboardStats()
+      if (data) {
+        // 更新卡片数据
+        dataList[0].num = data.onlineDevices || 0  // 在线设备数
+        dataList[1].num = data.systemUptime || 0    // 系统运行时长（天）
+        dataList[2].num = data.monthlyNewDevices || 0  // 月新增设备数
+        dataList[3].num = data.todayActivities || 0    // 今日动态数
+        
+        console.log('仪表板数据已更新:', data)
       }
     } catch (error) {
       console.error('加载仪表板数据失败:', error)

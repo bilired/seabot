@@ -1,18 +1,19 @@
 import request from '@/utils/http'
 
+interface DashboardStatsData {
+  onlineDevices: number
+  systemUptime: number
+  monthlyNewDevices: number
+  todayActivities: number
+  updatedAt: string
+}
+
 /**
  * 获取仪表板统计数据
  * @returns 仪表板统计数据
  */
 export function fetchDashboardStats() {
-  return request.get<{
-    totalTasks: number
-    completedTasks: number
-    activeProjects: number
-    totalSales: number
-    newUsersCount: number
-    updatedAt: string
-  }>({
+  return request.get<DashboardStatsData>({
     url: '/api/dashboard/stats/'
   })
 }

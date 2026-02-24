@@ -85,10 +85,10 @@
    */
   const loadUserActivity = async () => {
     try {
-      const response = await fetchUserActivity(8)
-      if (response.code === 200) {
+      const activities = await fetchUserActivity(8)
+      if (activities && Array.isArray(activities)) {
         // 可以选择用后端数据替换，或保持原有数据
-        console.log('后端活动数据:', response.data)
+        console.log('后端活动数据:', activities)
       }
     } catch (error) {
       console.error('加载用户活动失败:', error)
