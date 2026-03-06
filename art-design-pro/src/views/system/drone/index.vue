@@ -31,6 +31,9 @@
             </ElButton>
           </ElSpace>
         </template>
+        <template #settings>
+          <ElButton link type="primary" @click="handleEditSelected">修改已勾选设备</ElButton>
+        </template>
       </ArtTableHeader>
 
       <!-- 表格 -->
@@ -64,7 +67,7 @@
       />
 
       <!-- 添加设备对话框 -->
-      <ElDialog v-model="addDialogVisible" title="添加新设备" width="500px" @close="resetForm">
+      <ElDialog v-model="addDialogVisible" :title="isEditMode ? '修改设备' : '添加新设备'" width="500px" @close="resetForm">
         <ElForm :model="formData" :rules="formRules" ref="formRef" label-width="100px">
           <ElFormItem label="船型" prop="shipType">
             <ElInput v-model="formData.shipType" placeholder="例如：双体" />
@@ -84,10 +87,31 @@
           <ElFormItem label="功能模块" prop="functions">
             <ElInput v-model="formData.functions" placeholder="例如：图传、采样、水质监测" />
           </ElFormItem>
+          <ElFormItem label="设备照片" prop="image">
+            <ElUpload
+              :show-file-list="false"
+              accept="image/*"
+              :http-request="handleImageUpload"
+            >
+              <img
+                v-if="formData.image"
+                :src="formData.image"
+                alt="设备照片"
+                style="width: 120px; height: 120px; object-fit: cover; border-radius: 6px; border: 1px solid #dcdfe6;"
+              />
+              <ElButton v-else :loading="imageUploading">上传照片</ElButton>
+            </ElUpload>
+            <div v-if="formData.image" style="margin-top: 8px;">
+              <ElButton link type="danger" @click="removeImage">移除照片</ElButton>
+            </div>
+          </ElFormItem>
+          <ElFormItem label="直播拉流地址" prop="streamUrl">
+            <ElInput v-model="formData.streamUrl" placeholder="例如：http://example.com/live.m3u8" />
+          </ElFormItem>
         </ElForm>
         <template #footer>
           <ElButton @click="addDialogVisible = false">取消</ElButton>
-          <ElButton type="primary" @click="submitAddDevice" :loading="submitting">提交</ElButton>
+          <ElButton type="primary" @click="submitDevice" :loading="submitting">提交</ElButton>
         </template>
       </ElDialog>
     </ElCard>
@@ -99,10 +123,11 @@
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import { useTable } from '@/hooks/core/useTable'
   import type { ColumnOption } from '@/types/component'
-  import type { FormInstance } from 'element-plus'
-  import { ElTag, ElButton, ElSpace, ElMessage, ElMessageBox, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber } from 'element-plus'
+  import type { FormInstance, UploadRequestOptions } from 'element-plus'
+  import type { UploadAjaxError } from 'element-plus/es/components/upload/src/ajax'
+  import { ElTag, ElButton, ElSpace, ElMessage, ElMessageBox, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElUpload } from 'element-plus'
   import { Icon } from '@iconify/vue'
-  import { fetchDroneList, batchDeleteDrone, createDrone, type DroneItem } from '@/api/drone'
+  import { fetchDroneList, batchDeleteDrone, createDrone, updateDrone, uploadDroneImage, type DroneItem } from '@/api/drone'
   import ControlDialog from './modules/control-dialog.vue'
   import TrackDialog from './modules/track-dialog.vue'
   import DeviceDetailModal from '@/views/dashboard/console/modules/device-detail.vue'
@@ -124,15 +149,21 @@
 
   // 添加设备对话框状态
   const addDialogVisible = ref(false)
+  const isEditMode = ref(false)
+  const editingDeviceId = ref<string>('')
+  const editingDeviceStatus = ref<'online' | 'offline'>('offline')
   const formRef = ref<FormInstance>()
   const submitting = ref(false)
+  const imageUploading = ref(false)
   const formData = ref({
     shipType: '',
     model: '',
     length: 0,
     weight: 0,
     maxSpeed: 0,
-    functions: ''
+    functions: '',
+    image: '',
+    streamUrl: ''
   })
 
   // 表单验证规则
@@ -183,7 +214,20 @@
         { 
           prop: 'id', 
           label: 'ID',
-          width: 120
+          width: 80
+        },
+        {
+          prop: 'image',
+          label: '照片',
+          width: 100,
+          formatter: (row: DroneItem) =>
+            row.image
+              ? h('img', {
+                  src: row.image,
+                  alt: '设备照片',
+                  style: 'width:44px;height:44px;object-fit:cover;border-radius:4px;border:1px solid #ebeef5;'
+                })
+              : '-'
         },
         { 
           prop: 'shipType', 
@@ -282,7 +326,37 @@
    * 添加设备
    */
   const handleAdd = () => {
+    isEditMode.value = false
+    editingDeviceId.value = ''
+    editingDeviceStatus.value = 'offline'
     resetForm()
+    addDialogVisible.value = true
+  }
+
+  const handleEditSelected = () => {
+    if (selectedRows.value.length === 0) {
+      ElMessage.warning('请先勾选要修改的设备')
+      return
+    }
+    if (selectedRows.value.length > 1) {
+      ElMessage.warning('一次只能修改一个设备，请只勾选一条')
+      return
+    }
+
+    const selected = selectedRows.value[0]
+    isEditMode.value = true
+    editingDeviceId.value = selected.id
+    editingDeviceStatus.value = selected.status
+    formData.value = {
+      shipType: selected.shipType,
+      model: selected.model,
+      length: Number(selected.length),
+      weight: Number(selected.weight),
+      maxSpeed: Number(selected.maxSpeed),
+      functions: selected.functions,
+      image: selected.image || '',
+      streamUrl: selected.streamUrl || ''
+    }
     addDialogVisible.value = true
   }
 
@@ -297,41 +371,76 @@
       length: 0,
       weight: 0,
       maxSpeed: 0,
-      functions: ''
+      functions: '',
+      image: '',
+      streamUrl: ''
+    }
+  }
+
+  const removeImage = () => {
+    formData.value.image = ''
+  }
+
+  const handleImageUpload = async (options: UploadRequestOptions) => {
+    try {
+      imageUploading.value = true
+      const result = await uploadDroneImage(options.file)
+      formData.value.image = result.url
+      options.onSuccess?.(result)
+      ElMessage.success('照片上传成功')
+    } catch (error) {
+      options.onError?.(error as UploadAjaxError)
+      ElMessage.error('照片上传失败')
+    } finally {
+      imageUploading.value = false
     }
   }
 
   /**
    * 提交添加设备
    */
-  const submitAddDevice = async () => {
+  const submitDevice = async () => {
     if (!formRef.value) return
 
     try {
       await formRef.value.validate()
       submitting.value = true
 
-      // 调用后端 API 创建设备
-      const response = (await createDrone({
-        shipType: formData.value.shipType,
-        model: formData.value.model,
-        length: formData.value.length,
-        weight: formData.value.weight,
-        maxSpeed: formData.value.maxSpeed,
-        functions: formData.value.functions,
-        status: 'offline'
-      })) as any
+      if (isEditMode.value) {
+        await updateDrone({
+          id: editingDeviceId.value,
+          shipType: formData.value.shipType,
+          model: formData.value.model,
+          length: formData.value.length,
+          weight: formData.value.weight,
+          maxSpeed: formData.value.maxSpeed,
+          functions: formData.value.functions,
+          image: formData.value.image,
+          streamUrl: formData.value.streamUrl,
+          status: editingDeviceStatus.value
+        })
+        ElMessage.success('设备修改成功')
+      } else {
+        await createDrone({
+          shipType: formData.value.shipType,
+          model: formData.value.model,
+          length: formData.value.length,
+          weight: formData.value.weight,
+          maxSpeed: formData.value.maxSpeed,
+          functions: formData.value.functions,
+          image: formData.value.image,
+          streamUrl: formData.value.streamUrl,
+          status: 'offline'
+        })
+        ElMessage.success('设备添加成功')
+      }
 
-      // createDrone 返回的是 { id: "..." } 对象
-      // 如果没有异常，说明创建成功
-      ElMessage.success('设备添加成功')
       addDialogVisible.value = false
-      // 刷新设备列表
+      selectedRows.value = []
       await refreshData()
     } catch (e) {
-      console.error('添加设备异常:', e)
-      // HttpError 包含 message 属性
-      const errorMsg = (e as any)?.message || '添加设备失败，请重试'
+      console.error('提交设备异常:', e)
+      const errorMsg = (e as any)?.message || '提交失败，请重试'
       ElMessage.error(errorMsg)
     } finally {
       submitting.value = false

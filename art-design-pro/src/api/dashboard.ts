@@ -86,9 +86,7 @@ export function fetchWaterQualityData() {
       conductivity: number
       turbidity: number
       algae: number
-      warningCode: string
       collectionTime: string
-      connectionStatus: string
     }>
   >({
     url: '/api/analysis/water-quality/'
@@ -111,11 +109,7 @@ export function fetchNutrientData() {
       nitrateTime: string
       nitrite: number
       nitriteTime: string
-      errorCode1: string
-      errorCode2: string
-      instrumentStatus: string
       collectionTime: string
-      connectionStatus: string
     }>
   >({
     url: '/api/analysis/nutrient/'

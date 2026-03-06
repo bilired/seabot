@@ -5,33 +5,46 @@
       <div class="w-112 mr-5 max-md:w-full max-md:mr-0">
         <div class="art-card-sm relative p-9 pb-6 overflow-hidden text-center">
           <img class="absolute top-0 left-0 w-full h-50 object-cover" src="@imgs/user/bg.webp" />
-          <img
+          <ElImage
             class="relative z-10 w-20 h-20 mt-30 mx-auto object-cover border-2 border-white rounded-full"
-            src="@imgs/user/avatar.webp"
+            :src="avatarUrl"
+            :preview-src-list="[avatarUrl]"
+            preview-teleported
+            fit="cover"
           />
-          <h2 class="mt-5 text-xl font-normal">{{ userInfo.userName }}</h2>
-          <p class="mt-5 text-sm">专注于用户体验跟视觉设计</p>
+          <div class="relative z-10 mt-3">
+            <ElUpload
+              :show-file-list="false"
+              accept="image/*"
+              :before-upload="beforeAvatarUpload"
+              :http-request="handleAvatarUpload"
+            >
+              <ElButton size="small" :loading="avatarUploading">修改头像</ElButton>
+            </ElUpload>
+          </div>
+          <h2 class="mt-5 text-xl font-normal">{{ form.nikeName || form.realName || userInfo.userName }}</h2>
+          <p class="mt-5 text-sm">{{ form.des || '暂无个人介绍' }}</p>
 
           <div class="w-75 mx-auto mt-7.5 text-left">
             <div class="mt-2.5">
               <ArtSvgIcon icon="ri:mail-line" class="text-g-700" />
-              <span class="ml-2 text-sm">jdkjjfnndf@mall.com</span>
+              <span class="ml-2 text-sm">{{ form.email || '未设置邮箱' }}</span>
             </div>
             <div class="mt-2.5">
               <ArtSvgIcon icon="ri:user-3-line" class="text-g-700" />
-              <span class="ml-2 text-sm">交互专家</span>
+              <span class="ml-2 text-sm">{{ form.sex === '1' ? '男' : '女' }}</span>
             </div>
             <div class="mt-2.5">
               <ArtSvgIcon icon="ri:map-pin-line" class="text-g-700" />
-              <span class="ml-2 text-sm">广东省深圳市</span>
+              <span class="ml-2 text-sm">{{ form.address || '未设置地址' }}</span>
             </div>
             <div class="mt-2.5">
-              <ArtSvgIcon icon="ri:dribbble-fill" class="text-g-700" />
-              <span class="ml-2 text-sm">字节跳动－某某平台部－UED</span>
+              <ArtSvgIcon icon="ri:phone-line" class="text-g-700" />
+              <span class="ml-2 text-sm">{{ form.mobile || '未设置手机号' }}</span>
             </div>
           </div>
 
-          <div class="mt-10">
+          <!-- <div class="mt-10">
             <h3 class="text-sm font-medium">标签</h3>
             <div class="flex flex-wrap justify-center mt-3.5">
               <div
@@ -42,7 +55,7 @@
                 {{ item }}
               </div>
             </div>
-          </div>
+          </div> -->
         </div>
       </div>
       <div class="flex-1 overflow-hidden max-md:w-full max-md:mt-3.5">
@@ -147,13 +160,19 @@
 </template>
 
 <script setup lang="ts">
+  import avatarDefault from '@imgs/user/avatar.webp'
   import { useUserStore } from '@/store/modules/user'
-  import type { FormInstance, FormRules } from 'element-plus'
+  import { fetchUploadUserAvatar } from '@/api/auth'
+  import type { FormInstance, FormRules, UploadRequestOptions } from 'element-plus'
+  import type { UploadAjaxError } from 'element-plus/es/components/upload/src/ajax'
 
   defineOptions({ name: 'UserCenter' })
 
   const userStore = useUserStore()
   const userInfo = computed(() => userStore.getUserInfo)
+  const avatarUploading = ref(false)
+  const avatarUrl = computed(() => userInfo.value?.avatar || avatarDefault)
+  const AVATAR_MAX_SIZE_MB = 5
 
   const isEdit = ref(false)
   const isEditPwd = ref(false)
@@ -214,8 +233,26 @@
   const lableList: Array<string> = ['专注设计', '很有想法', '辣~', '大长腿', '川妹子', '海纳百川']
 
   onMounted(() => {
+    syncFormWithUserInfo()
     getDate()
   })
+
+  watch(
+    () => userInfo.value,
+    () => {
+      if (!isEdit.value) {
+        syncFormWithUserInfo()
+      }
+    },
+    { deep: true }
+  )
+
+  const syncFormWithUserInfo = () => {
+    const userName = userInfo.value?.userName || ''
+    form.realName = userName || form.realName
+    form.nikeName = form.nikeName || userName
+    form.email = userInfo.value?.email || form.email
+  }
 
   /**
    * 根据当前时间获取问候语
@@ -243,5 +280,40 @@
    */
   const editPwd = () => {
     isEditPwd.value = !isEditPwd.value
+  }
+
+  const beforeAvatarUpload = (file: File) => {
+    const isImage = file.type.startsWith('image/')
+    const isLt5M = file.size / 1024 / 1024 <= AVATAR_MAX_SIZE_MB
+
+    if (!isImage) {
+      ElMessage.error('仅支持上传图片文件')
+      return false
+    }
+
+    if (!isLt5M) {
+      ElMessage.error(`头像大小不能超过 ${AVATAR_MAX_SIZE_MB}MB`)
+      return false
+    }
+
+    return true
+  }
+
+  const handleAvatarUpload = async (options: UploadRequestOptions) => {
+    try {
+      avatarUploading.value = true
+      const result = await fetchUploadUserAvatar(options.file)
+      userStore.setUserInfo({
+        ...(userStore.getUserInfo as Api.Auth.UserInfo),
+        avatar: result.url
+      } as Api.Auth.UserInfo)
+      options.onSuccess?.(result)
+      ElMessage.success('头像更新成功')
+    } catch (error) {
+      options.onError?.(error as UploadAjaxError)
+      ElMessage.error('头像更新失败')
+    } finally {
+      avatarUploading.value = false
+    }
   }
 </script>

@@ -15,6 +15,7 @@
         "/^source /Users/hanksgao/Desktop/seabot/\\.venv/bin/activate && python3 manage\\.py runserver 0\\.0\\.0\\.0:8000$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "/Volumes/disk/seabot/.venv/bin/python": true
     }
 }

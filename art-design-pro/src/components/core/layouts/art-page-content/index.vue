@@ -126,6 +126,16 @@
 
   watch(refresh, reload, { flush: 'post' })
 
+  watch(
+    () => route.fullPath,
+    (_newPath, oldPath) => {
+      if (oldPath !== undefined && oldPath !== null) {
+        reload()
+      }
+    },
+    { flush: 'post' }
+  )
+
   // 组件挂载后标记首次加载完成
   onMounted(() => {
     // 延迟一帧，确保首次渲染完成

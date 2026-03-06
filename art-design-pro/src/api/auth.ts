@@ -12,6 +12,13 @@ export function fetchRegister(data: Api.Auth.RegisterParams) {
   })
 }
 
+export function fetchRegisterSmsCode(data: Api.Auth.SendSmsCodeParams) {
+  return request.post<{ code: number; msg: string }>({
+    url: '/api/register/sms/send/',
+    data
+  })
+}
+
 /**
  * 登录
  * @param params 登录参数
@@ -38,6 +45,16 @@ export function fetchGetUserInfo() {
     // headers: {
     //   'X-Custom-Header': 'your-custom-value'
     // }
+  })
+}
+
+export function fetchUploadUserAvatar(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request.post<{ url: string }>({
+    url: '/api/user/avatar/upload/',
+    data: formData
   })
 }
 

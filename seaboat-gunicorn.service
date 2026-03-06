@@ -1,0 +1,66 @@
+# SeaBoat Gunicorn Systemd 服务文件
+# 文件位置：/etc/systemd/system/seaboat-gunicorn.service
+#
+# 安装步骤：
+#   1. sudo cp seaboat-gunicorn.service /etc/systemd/system/
+#   2. sudo systemctl daemon-reload
+#   3. sudo systemctl enable seaboat-gunicorn
+#   4. sudo systemctl start seaboat-gunicorn
+#   5. sudo systemctl status seaboat-gunicorn
+#
+# 常用命令：
+#   sudo systemctl start seaboat-gunicorn     # 启动
+#   sudo systemctl stop seaboat-gunicorn      # 停止
+#   sudo systemctl restart seaboat-gunicorn   # 重启
+#   sudo systemctl status seaboat-gunicorn    # 查看状态
+#   sudo journalctl -u seaboat-gunicorn -f    # 查看日志
+
+[Unit]
+Description=SeaBoat Gunicorn Application Server
+After=network.target mysql.service
+
+[Service]
+Type=notify
+User=www
+Group=www
+WorkingDirectory=/home/wwwroot/yunpingtai.cc/back-end/seadrone
+
+# 环境变量设置
+Environment="PATH=/home/wwwroot/yunpingtai.cc/venv/bin"
+Environment="DJANGO_SETTINGS_MODULE=seadrone.settings_prod"
+Environment="DB_PASSWORD=YOUR_DATABASE_PASSWORD"
+Environment="SECRET_KEY=YOUR_SECRET_KEY_HERE"
+EnvironmentFile=-/home/wwwroot/yunpingtai.cc/.env
+
+# 启动命令 - Gunicorn + 4 个 worker 进程
+ExecStart=/home/wwwroot/yunpingtai.cc/venv/bin/gunicorn \
+    --name seaboat \
+    --workers 4 \
+    --worker-class sync \
+    --worker-tmp-dir /dev/shm \
+    --bind unix:/home/wwwroot/yunpingtai.cc/gunicorn.sock \
+    --log-level info \
+    --access-logfile /home/wwwroot/yunpingtai.cc/logs/gunicorn_access.log \
+    --error-logfile /home/wwwroot/yunpingtai.cc/logs/gunicorn_error.log \
+    --capture-output \
+    seadrone.wsgi:application
+
+# 重载命令
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# 守护进程配置
+Restart=on-failure
+RestartSec=5s
+KillMode=mixed
+KillSignal=SIGTERM
+
+# 资源限制
+LimitNOFILE=65535
+LimitNPROC=65535
+
+# 运行时目录
+RuntimeDirectory=seaboat
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target

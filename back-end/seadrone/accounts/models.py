@@ -75,13 +75,30 @@ class UserActivity(models.Model):
         return f"{self.user.username} - {self.activity_type}"
 
 
+class UserProfile(models.Model):
+    """用户扩展信息"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    avatar = models.CharField(max_length=500, blank=True, default='', help_text='头像URL')
+    mobile = models.CharField(max_length=20, blank=True, default='', help_text='手机号')
+
+    class Meta:
+        verbose_name = '用户扩展信息'
+        verbose_name_plural = '用户扩展信息'
+
+    def __str__(self):
+        return f"{self.user.username} - Profile"
+
+
 class DroneDevice(models.Model):
     """无人船设备信息"""
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='drone_devices', null=True, blank=True)
     ship_type = models.CharField(max_length=50, help_text='船型')
     length = models.IntegerField(help_text='长度(cm)')
     model = models.CharField(max_length=50, help_text='型号')
     weight = models.FloatField(help_text='重量(kg)')
     functions = models.CharField(max_length=255, help_text='功能模块')
+    image = models.CharField(max_length=500, blank=True, default='', help_text='设备照片URL')
+    stream_url = models.CharField(max_length=500, blank=True, default='', help_text='直播拉流地址')
     status = models.CharField(
         max_length=20,
         choices=[('online', '在线'), ('offline', '离线')],

@@ -67,16 +67,19 @@ declare namespace Api {
       userName: string
       password: string
       confirmPassword: string
+      mobile: string
+      smsCode: string
+    }
+
+    interface SendSmsCodeParams {
+      mobile: string
     }
 
     /** 注册响应 */
     interface RegisterResponse {
-      code: number
-      msg: string
-      data: {
-        userId: number
-        userName: string
-      }
+      userId: number
+      userName: string
+      mobile?: string
     }
 
     /** 登录参数 */
@@ -99,6 +102,10 @@ declare namespace Api {
       userName: string
       email: string
       avatar?: string
+    }
+
+    interface UploadAvatarResponse {
+      url: string
     }
   }
 
@@ -129,6 +136,17 @@ declare namespace Api {
       Pick<UserListItem, 'id' | 'userName' | 'userGender' | 'userPhone' | 'userEmail' | 'status'> &
         Api.Common.CommonSearchParams
     >
+
+    interface UserSubmitParams {
+      id?: number
+      userName: string
+      userPhone?: string
+      userEmail?: string
+      userGender?: string
+      userRoles?: string[]
+      status?: string
+      password?: string
+    }
 
     /** 角色列表 */
     type RoleList = Api.Common.PaginatedResponse<RoleListItem>

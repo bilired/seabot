@@ -4,8 +4,29 @@ import { AppRouteRecord } from '@/types/router'
 // 获取用户列表
 export function fetchGetUserList(params: Api.SystemManage.UserSearchParams) {
   return request.get<Api.SystemManage.UserList>({
-    url: '/api/user/list',
+    url: '/api/user/list/',
     params
+  })
+}
+
+export function fetchCreateUser(data: Api.SystemManage.UserSubmitParams) {
+  return request.post<{ id: number }>({
+    url: '/api/user/create/',
+    data
+  })
+}
+
+export function fetchUpdateUser(data: Api.SystemManage.UserSubmitParams & { id: number }) {
+  return request.post<{ id: number }>({
+    url: '/api/user/update/',
+    data
+  })
+}
+
+export function fetchDeleteUser(data: { id: number }) {
+  return request.post({
+    url: '/api/user/delete/',
+    data
   })
 }
 

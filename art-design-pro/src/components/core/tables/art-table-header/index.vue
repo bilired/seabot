@@ -115,6 +115,7 @@
           <ElCheckbox v-if="showHeaderBackground" v-model="isHeaderBackground" :value="true">{{
             t('table.headerBackground')
           }}</ElCheckbox>
+          <slot name="settings"></slot>
         </div>
       </ElPopover>
       <slot name="right"></slot>

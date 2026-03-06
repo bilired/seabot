@@ -8,6 +8,8 @@ export interface DroneItem {
   model: string
   weight: number
   functions: string
+  image?: string
+  streamUrl?: string
   status: 'online' | 'offline'
   maxSpeed: number
 }
@@ -21,6 +23,19 @@ export interface DroneListData {
 
 export interface DroneListResponse extends BaseResponse {
   data: DroneListData
+}
+
+export interface ShipActionParams {
+  cmd: string
+  shipPort: number
+  controlPort: number
+}
+
+export interface ShipActionResult {
+  cmd: string
+  packet_hex: string
+  delivered_ports: number[]
+  failed_ports: number[]
 }
 
 export function fetchDroneList(params: { current: number; size: number; keyword?: string }) {
@@ -37,6 +52,13 @@ export function createDrone(data: Omit<DroneItem, 'id'>) {
   })
 }
 
+export function updateDrone(data: DroneItem) {
+  return request.post<{ id: string }>({
+    url: '/api/drone/update/',
+    data
+  })
+}
+
 export function deleteDrone(data: { id: string }) {
   return request.post({
     url: '/api/drone/delete/',
@@ -47,6 +69,23 @@ export function deleteDrone(data: { id: string }) {
 export function batchDeleteDrone(data: { ids: string[] }) {
   return request.post<{ deleted: number }>({
     url: '/api/drone/batch-delete/',
+    data
+  })
+}
+
+export function uploadDroneImage(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return request.post<{ url: string }>({
+    url: '/api/drone/upload-image/',
+    data: formData
+  })
+}
+
+export function sendShipAction(data: ShipActionParams) {
+  return request.post<ShipActionResult>({
+    url: '/api/ship/action/',
     data
   })
 }

@@ -168,6 +168,8 @@
     "subTitle": "欢迎加入我们，请填写以下信息完成注册",
     "placeholder": {
       "username": "请输入账号",
+      "mobile": "请输入手机号",
+      "smsCode": "请输入短信验证码",
       "password": "请输入密码",
       "confirmPassword": "请再次输入密码"
     },
@@ -176,8 +178,15 @@
       "passwordMismatch": "两次输入密码不一致!",
       "usernameLength": "长度在 3 到 20 个字符",
       "passwordLength": "密码长度不能小于6位",
+      "mobileRequired": "请输入手机号",
+      "mobileInvalid": "手机号格式不正确",
+      "smsCodeRequired": "请输入短信验证码",
+      "smsCodeSent": "验证码发送成功",
       "agreementRequired": "请同意隐私协议"
     },
+    "sendCode": "获取验证码",
+    "successAutoLogin": "注册并登录成功",
+    "registerFailedRetry": "注册失败，请稍后重试",
     "agreeText": "我同意",
     "privacyPolicy": "《隐私政策》",
     "submitBtnText": "注册",
@@ -224,7 +233,7 @@
     "dashboard": {
       "title": "仪表盘",
       "console": "工作台",
-      "analysis": "分析页",
+      "analysis": "数据监测",
       "ecommerce": "电子商务"
     },
     "widgets": {

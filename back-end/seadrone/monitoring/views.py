@@ -3,7 +3,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
+from django.utils import timezone
 from .models import WaterQualityData, NutrientData
+from .ship_gateway import gateway_service, parse_packets, parse_water_payload, parse_nutrient_payload
 
 
 @api_view(['GET'])
@@ -14,8 +16,8 @@ def get_water_quality_data(request):
     返回：水质数据列表
     """
     try:
-        # 获取最新的20条数据
-        water_data = WaterQualityData.objects.all()[:20]
+        # 获取最新的100条数据
+        water_data = WaterQualityData.objects.all()[:100]
         
         data_list = []
         for item in water_data:
@@ -29,9 +31,7 @@ def get_water_quality_data(request):
                 "conductivity": item.conductivity,
                 "turbidity": item.turbidity,
                 "algae": item.algae,
-                "warningCode": item.warning_code,
-                "collectionTime": item.collection_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "connectionStatus": item.connection_status
+                "collectionTime": timezone.localtime(item.collection_time).strftime('%Y-%m-%d %H:%M:%S')
             })
         
         return Response({
@@ -62,18 +62,14 @@ def get_nutrient_data(request):
             data_list.append({
                 "shipModel": item.ship_model,
                 "phosphate": item.phosphate,
-                "phosphateTime": item.phosphate_time.strftime('%Y-%m-%d %H:%M:%S'),
+                "phosphateTime": timezone.localtime(item.phosphate_time).strftime('%Y-%m-%d %H:%M:%S'),
                 "ammonia": item.ammonia,
-                "ammoniaTime": item.ammonia_time.strftime('%Y-%m-%d %H:%M:%S'),
+                "ammoniaTime": timezone.localtime(item.ammonia_time).strftime('%Y-%m-%d %H:%M:%S'),
                 "nitrate": item.nitrate,
-                "nitrateTime": item.nitrate_time.strftime('%Y-%m-%d %H:%M:%S'),
+                "nitrateTime": timezone.localtime(item.nitrate_time).strftime('%Y-%m-%d %H:%M:%S'),
                 "nitrite": item.nitrite,
-                "nitriteTime": item.nitrite_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "errorCode1": item.error_code1,
-                "errorCode2": item.error_code2,
-                "instrumentStatus": item.instrument_status,
-                "collectionTime": item.collection_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "connectionStatus": item.connection_status
+                "nitriteTime": timezone.localtime(item.nitrite_time).strftime('%Y-%m-%d %H:%M:%S'),
+                "collectionTime": timezone.localtime(item.collection_time).strftime('%Y-%m-%d %H:%M:%S')
             })
         
         return Response({
@@ -155,8 +151,6 @@ def upload_nutrient_data(request):
     - ... 其他营养盐参数
     """
     try:
-        from django.utils import timezone
-        
         ship_model = request.data.get('shipModel')
         phosphate = request.data.get('phosphate')
         ammonia = request.data.get('ammonia')
@@ -200,4 +194,121 @@ def upload_nutrient_data(request):
         return Response({
             "code": 500,
             "msg": f"上传失败: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([])
+def upload_ship_packet_data(request):
+    """上传无人船原始十六进制报文并解析入库"""
+    try:
+        ship_port = int(request.data.get('shipPort', 0))
+        packet_hex = (request.data.get('packetHex') or '').replace(' ', '')
+
+        if not ship_port or not packet_hex:
+            return Response({
+                "code": 400,
+                "msg": "缺少 shipPort 或 packetHex"
+            }, status=status.HTTP_200_OK)
+
+        packet_bytes = bytes.fromhex(packet_hex)
+        packets, remaining = parse_packets(packet_bytes)
+
+        saved = {
+            'water': 0,
+            'nutrient': 0,
+        }
+
+        for packet in packets:
+            packet_type = packet['packet_type']
+            if packet_type == 'W':
+                model_data = parse_water_payload(str(ship_port), packet['payload_text'])
+                WaterQualityData.objects.create(**model_data)
+                saved['water'] += 1
+            elif packet_type in ('Y', '@'):
+                model_data = parse_nutrient_payload(str(ship_port), packet['payload_text'])
+                NutrientData.objects.create(**model_data)
+                saved['nutrient'] += 1
+
+        return Response({
+            "code": 200,
+            "msg": "解析成功",
+            "data": {
+                "packetCount": len(packets),
+                "remainingBytes": len(remaining),
+                "saved": saved,
+            }
+        }, status=status.HTTP_200_OK)
+    except ValueError as e:
+        return Response({
+            "code": 400,
+            "msg": f"报文解析失败: {str(e)}"
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            "code": 500,
+            "msg": f"上传失败: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([])
+def ship_gateway_start(request):
+    """启动TCP船舶网关服务"""
+    try:
+        gateway_service.start()
+        return Response({
+            "code": 200,
+            "msg": "网关已启动",
+            "data": gateway_service.status()
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            "code": 500,
+            "msg": f"启动失败: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([])
+def ship_gateway_status(request):
+    """查看TCP船舶网关服务状态"""
+    return Response({
+        "code": 200,
+        "msg": "获取成功",
+        "data": gateway_service.status()
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([])
+def ship_action(request):
+    """发送无人船/遥控器控制命令"""
+    try:
+        cmd = request.data.get('cmd')
+        ship_port = int(request.data.get('shipPort'))
+        control_port = int(request.data.get('controlPort'))
+    except Exception:
+        return Response({
+            "code": 400,
+            "msg": "参数错误，示例: {\"cmd\":\"up\",\"shipPort\":9001,\"controlPort\":9002}"
+        }, status=status.HTTP_200_OK)
+
+    try:
+        result = gateway_service.send_action(cmd=cmd, ship_port=ship_port, control_port=control_port)
+        success = len(result['delivered_ports']) > 0
+        return Response({
+            "code": 200 if success else 503,
+            "msg": "发送成功" if success else "设备未在线",
+            "data": result
+        }, status=status.HTTP_200_OK if success else status.HTTP_503_SERVICE_UNAVAILABLE)
+    except ValueError as e:
+        return Response({
+            "code": 400,
+            "msg": str(e)
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            "code": 500,
+            "msg": f"发送失败: {str(e)}"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

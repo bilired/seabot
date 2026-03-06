@@ -168,6 +168,8 @@
     "subTitle": "Welcome to join us, please fill in the following information to complete the registration",
     "placeholder": {
       "username": "Please enter your account",
+      "mobile": "Please enter your mobile number",
+      "smsCode": "Please enter SMS code",
       "password": "Please enter your password",
       "confirmPassword": "Please enter your password again"
     },
@@ -176,8 +178,15 @@
       "passwordMismatch": "The two passwords are inconsistent!",
       "usernameLength": "The length is 3 to 20 characters",
       "passwordLength": "The password length cannot be less than 6 digits",
+      "mobileRequired": "Please enter your mobile number",
+      "mobileInvalid": "Invalid mobile number format",
+      "smsCodeRequired": "Please enter SMS code",
+      "smsCodeSent": "SMS code sent successfully",
       "agreementRequired": "Please agree to the privacy policy"
     },
+    "sendCode": "Send Code",
+    "successAutoLogin": "Registration and login successful",
+    "registerFailedRetry": "Registration failed, please try again later",
     "agreeText": "I agree",
     "privacyPolicy": "Privacy policy",
     "submitBtnText": "Register",
@@ -224,7 +233,7 @@
     "dashboard": {
       "title": "Dashboard",
       "console": "Console",
-      "analysis": "Analysis",
+      "analysis": "Data Monitoring",
       "ecommerce": "Ecommerce"
     },
     "widgets": {

@@ -11,7 +11,7 @@
     </div>
 
     <div class="flex items-center mb-3">
-      <h4 class="text-2xl font-bold mr-6">实时水质监测</h4>
+      <h4 class="text-2xl font-bold mr-6">{{ chartTitle }}</h4>
       <div class="flex flex-wrap gap-2">
         <ElButton
           v-for="opt in chartOptions"
@@ -31,19 +31,73 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, reactive } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElButton } from 'element-plus'
 import { use } from 'echarts/core'
 import VChart from 'vue-echarts'
 import { LineChart } from 'echarts/charts'
 import { TitleComponent, TooltipComponent, GridComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { fetchNutrientData, fetchWaterQualityData } from '@/api/dashboard'
 
 use([LineChart, TitleComponent, TooltipComponent, GridComponent, LegendComponent, CanvasRenderer])
 
-type DataKey = 'temp' | 'ph' | 'chlorophyll' | 'salinity' | 'oxygen' | 'conductivity' | 'turbidity' | 'cyanobacteria'
+type WaterDataKey =
+  | 'temp'
+  | 'ph'
+  | 'chlorophyll'
+  | 'salinity'
+  | 'oxygen'
+  | 'conductivity'
+  | 'turbidity'
+  | 'cyanobacteria'
 
-const chartOptions: { key: DataKey; label: string }[] = [
+type NutrientDataKey =
+  | 'phosphate'
+  | 'ammonia'
+  | 'nitrate'
+  | 'nitrite'
+
+type DataKey = WaterDataKey | NutrientDataKey
+
+interface WaterQualityDataItem {
+  shipModel: string
+  temperature: number
+  ph: number
+  chlorophyll: number
+  salinity: number
+  dissolvedOxygen: number
+  conductivity: number
+  turbidity: number
+  algae: number
+  collectionTime: string
+}
+
+interface NutrientDataItem {
+  shipModel: string
+  phosphate: number
+  phosphateTime: string
+  ammonia: number
+  ammoniaTime: string
+  nitrate: number
+  nitrateTime: string
+  nitrite: number
+  nitriteTime: string
+  collectionTime: string
+}
+
+const props = withDefaults(
+  defineProps<{
+    selectedModel?: string
+    dataType?: 'water' | 'nutrients'
+  }>(),
+  {
+    selectedModel: '',
+    dataType: 'water'
+  }
+)
+
+const waterChartOptions: { key: WaterDataKey; label: string }[] = [
   { key: 'temp', label: '水温（°C）' },
   { key: 'ph', label: 'PH值' },
   { key: 'chlorophyll', label: '叶绿素浓度（μg/L）' },
@@ -54,70 +108,185 @@ const chartOptions: { key: DataKey; label: string }[] = [
   { key: 'cyanobacteria', label: '蓝绿藻（cells/mL）' }
 ]
 
+const nutrientChartOptions: { key: NutrientDataKey; label: string }[] = [
+  { key: 'phosphate', label: '磷酸盐（mg/L）' },
+  { key: 'ammonia', label: '氨氮（mg/L）' },
+  { key: 'nitrate', label: '硝酸盐（mg/L）' },
+  { key: 'nitrite', label: '亚硝酸盐（mg/L）' }
+]
+
+const chartOptions = computed(() =>
+  props.dataType === 'water' ? waterChartOptions : nutrientChartOptions
+)
+
 const selectedKey = ref<DataKey>('temp')
 
-// 时间轴（示意）
-const timeLabels = Array.from({ length: 24 }, (_, i) => `${i}:00`)
+const waterQualityDataList = ref<WaterQualityDataItem[]>([])
+const nutrientDataList = ref<NutrientDataItem[]>([])
 
-const dataMap = reactive<Record<DataKey, number[]>>({
-  temp: Array.from({ length: 24 }, () => +(20 + Math.random() * 5).toFixed(2)),
-  ph: Array.from({ length: 24 }, () => +(7 + Math.random() * 0.5).toFixed(2)),
-  chlorophyll: Array.from({ length: 24 }, () => +(10 + Math.random() * 10).toFixed(2)),
-  salinity: Array.from({ length: 24 }, () => +(30 + Math.random() * 5).toFixed(2)),
-  oxygen: Array.from({ length: 24 }, () => +(6 + Math.random() * 2).toFixed(2)),
-  conductivity: Array.from({ length: 24 }, () => +(400 + Math.random() * 200).toFixed(2)),
-  turbidity: Array.from({ length: 24 }, () => +(1 + Math.random() * 5).toFixed(2)),
-  cyanobacteria: Array.from({ length: 24 }, () => +(1000 + Math.random() * 500).toFixed(0))
+const normalizeModel = (value?: string) => (value || '').trim().toLowerCase()
+
+const isModelMatched = (shipModel: string, selectedModel: string) => {
+  const ship = normalizeModel(shipModel)
+  const selected = normalizeModel(selectedModel)
+  if (!selected) return true
+  return ship === selected || ship.includes(selected) || selected.includes(ship)
+}
+
+const filteredWaterQualityDataList = computed(() => {
+  if (!props.selectedModel) {
+    return waterQualityDataList.value
+  }
+
+  return waterQualityDataList.value.filter((item) => isModelMatched(item.shipModel, props.selectedModel))
 })
 
-const snapshotMap = computed<Record<DataKey, number | string>>(() => {
-  const m = {} as Record<DataKey, number | string>
-  chartOptions.forEach((opt) => {
-    const arr = dataMap[opt.key]
-    m[opt.key] = arr && arr.length ? arr[arr.length - 1] : '--'
-  })
-  return m
+const filteredNutrientDataList = computed(() => {
+  if (!props.selectedModel) {
+    return nutrientDataList.value
+  }
+
+  return nutrientDataList.value.filter((item) => isModelMatched(item.shipModel, props.selectedModel))
 })
 
-let simTimer: number | undefined
-
-function genNextValue(key: DataKey) {
-  const arr = dataMap[key]
-  const last = arr[arr.length - 1] ?? 0
-  const delta = (Math.random() - 0.5) * (Math.abs(last) * 0.02 + 0.5)
-  const next = +(Math.max(0, last + delta)).toFixed(Number.isInteger(last) ? 0 : 2)
-  return next
-}
-
-function simulateUpdate() {
-  ;(Object.keys(dataMap) as DataKey[]).forEach((k) => {
-    dataMap[k].push(genNextValue(k))
-    if (dataMap[k].length > 24) dataMap[k].shift()
+const snapshotMap = computed<Record<string, number | string>>(() => {
+  const map: Record<string, number | string> = {}
+  chartOptions.value.forEach((option) => {
+    map[option.key] = '--'
   })
-}
 
-function startSimulation(interval = 5000) {
-  stopSimulation()
-  simulateUpdate()
-  simTimer = window.setInterval(simulateUpdate, interval)
-}
+  if (props.dataType === 'water') {
+    const latest = filteredWaterQualityDataList.value[0]
+    if (!latest) return map
+    map.temp = latest.temperature
+    map.ph = latest.ph
+    map.chlorophyll = latest.chlorophyll
+    map.salinity = latest.salinity
+    map.oxygen = latest.dissolvedOxygen
+    map.conductivity = latest.conductivity
+    map.turbidity = latest.turbidity
+    map.cyanobacteria = latest.algae
+    return map
+  }
 
-function stopSimulation() {
-  if (simTimer) {
-    clearInterval(simTimer)
-    simTimer = undefined
+  const latestNutrient = filteredNutrientDataList.value[0]
+  if (!latestNutrient) return map
+  map.phosphate = latestNutrient.phosphate
+  map.ammonia = latestNutrient.ammonia
+  map.nitrate = latestNutrient.nitrate
+  map.nitrite = latestNutrient.nitrite
+  return map
+})
+
+const MAX_POINTS = 10
+
+const historyData = computed(() => {
+  const source = props.dataType === 'water' ? filteredWaterQualityDataList.value : filteredNutrientDataList.value
+  return [...source].reverse().slice(-MAX_POINTS)
+})
+
+const timeLabels = computed(() =>
+  historyData.value.map((item) => item.collectionTime?.slice(11) || item.collectionTime)
+)
+
+const seriesDataMap = computed<Record<DataKey, number[]>>(() => {
+  if (props.dataType === 'water') {
+    const data = historyData.value as WaterQualityDataItem[]
+    return {
+      temp: data.map((item) => item.temperature),
+      ph: data.map((item) => item.ph),
+      chlorophyll: data.map((item) => item.chlorophyll),
+      salinity: data.map((item) => item.salinity),
+      oxygen: data.map((item) => item.dissolvedOxygen),
+      conductivity: data.map((item) => item.conductivity),
+      turbidity: data.map((item) => item.turbidity),
+      cyanobacteria: data.map((item) => item.algae),
+      phosphate: [],
+      ammonia: [],
+      nitrate: [],
+      nitrite: []
+    }
+  }
+
+  const data = historyData.value as NutrientDataItem[]
+  return {
+    temp: [],
+    ph: [],
+    chlorophyll: [],
+    salinity: [],
+    oxygen: [],
+    conductivity: [],
+    turbidity: [],
+    cyanobacteria: [],
+    phosphate: data.map((item) => item.phosphate),
+    ammonia: data.map((item) => item.ammonia),
+    nitrate: data.map((item) => item.nitrate),
+    nitrite: data.map((item) => item.nitrite)
+  }
+})
+
+let refreshTimer: number | undefined
+
+async function loadWaterQualityData() {
+  try {
+    const data = await fetchWaterQualityData()
+    if (Array.isArray(data)) {
+      waterQualityDataList.value = data
+    }
+  } catch (error) {
+    console.error('加载水质曲线数据失败:', error)
   }
 }
 
-onMounted(() => startSimulation(5000))
-onBeforeUnmount(() => stopSimulation())
+async function loadNutrientData() {
+  try {
+    const data = await fetchNutrientData()
+    if (Array.isArray(data)) {
+      nutrientDataList.value = data
+    }
+  } catch (error) {
+    console.error('加载营养盐曲线数据失败:', error)
+  }
+}
+
+function startAutoRefresh(interval = 5000) {
+  stopAutoRefresh()
+  loadWaterQualityData()
+  loadNutrientData()
+  refreshTimer = window.setInterval(() => {
+    loadWaterQualityData()
+    loadNutrientData()
+  }, interval)
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = undefined
+  }
+}
+
+onMounted(() => startAutoRefresh(5000))
+onBeforeUnmount(() => stopAutoRefresh())
+
+watch(
+  () => props.dataType,
+  (type) => {
+    selectedKey.value = type === 'water' ? 'temp' : 'phosphate'
+  },
+  { immediate: true }
+)
+
+const chartTitle = computed(() =>
+  props.dataType === 'water' ? '实时水质监测' : '实时营养盐监测'
+)
 
 const echartsOption = computed(() => ({
   tooltip: { trigger: 'axis' },
   grid: { left: 40, right: 20, top: 40, bottom: 40 },
   xAxis: {
     type: 'category',
-    data: timeLabels,
+    data: timeLabels.value,
     boundaryGap: false
   },
   yAxis: {
@@ -126,13 +295,20 @@ const echartsOption = computed(() => ({
   },
   series: [
     {
-      name: chartOptions.find((opt) => opt.key === selectedKey.value)?.label,
+      name: chartOptions.value.find((opt) => opt.key === selectedKey.value)?.label,
       type: 'line',
       smooth: true,
-      symbol: 'none',
+      symbol: 'circle',
+      symbolSize: 6,
+      label: {
+        show: true,
+        position: 'top',
+        formatter: ({ value }: { value: number }) =>
+          Number.isFinite(value) ? Number(value).toFixed(2).replace(/\.00$/, '') : '--'
+      },
       areaStyle: { color: 'rgba(0,123,255,0.08)' },
       lineStyle: { width: 3, color: '#409EFF' },
-      data: dataMap[selectedKey.value]
+      data: seriesDataMap.value[selectedKey.value]
     }
   ]
 }))

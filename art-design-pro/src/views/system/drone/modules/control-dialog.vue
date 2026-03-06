@@ -14,17 +14,25 @@
           <h3>{{ deviceData?.model || 'DL-3026' }}</h3>
         </div>
         <div class="video-player">
-          <div class="video-placeholder">
-            <Icon icon="ri:live-line" class="video-icon" />
-            <p class="video-text">播放出错误 (LICENSE ERROR)</p>
-            <ElButton type="primary" size="small" @click="refreshStream">刷新</ElButton>
-            <div class="error-info">
-              <p>code: 4040</p>
-              <p>uuid: 9E102A75-97D5-4930-878A-42DF06F73FBC</p>
-              <p>requestId(playerc): FF01BE7C-AF3E-45ED-B67E-C3470A1565FB</p>
-              <p>ver: 2.34.5</p>
-              <p>播放时间: {{ currentTime }}</p>
+          <div v-if="streamUrl" class="video-wrapper">
+            <ArtVideoPlayer
+              :key="playerKey"
+              :player-id="`drone-player-${playerKey}`"
+              :video-url="streamUrl"
+              poster-url=""
+              :autoplay="true"
+              :muted="true"
+              :volume="0"
+              :loop="true"
+            />
+            <div class="stream-toolbar">
+              <ElButton type="primary" size="small" @click="refreshStream">刷新</ElButton>
             </div>
+          </div>
+          <div v-else class="video-placeholder">
+            <Icon icon="ri:live-line" class="video-icon" />
+            <p class="video-text">当前设备未配置直播拉流地址</p>
+            <p class="video-sub-text">请在设备管理页勾选设备后点击右上角齿轮进行修改</p>
           </div>
         </div>
       </div>
@@ -37,17 +45,32 @@
           
           <div class="control-item">
             <label>采样装置:</label>
-            <ElSwitch v-model="controls.sampling" active-text="开启" />
+            <ElSwitch
+              v-model="controls.sampling"
+              active-text="开启"
+              :disabled="isSending"
+              @change="handleSamplingChange"
+            />
           </div>
 
           <div class="control-item">
             <label>环境监测仪器提起回收:</label>
-            <ElSwitch v-model="controls.monitoring" active-text="开启" />
+            <ElSwitch
+              v-model="controls.monitoring"
+              active-text="开启"
+              :disabled="isSending"
+              @change="handleMonitoringChange"
+            />
           </div>
 
           <div class="control-item">
             <label>环境仪器状态:</label>
-            <ElSwitch v-model="controls.instrumentStatus" active-text="正常" />
+            <ElSwitch
+              v-model="controls.instrumentStatus"
+              active-text="正常"
+              :disabled="isSending"
+              @change="handleInstrumentStatusChange"
+            />
           </div>
 
           <div class="control-item">
@@ -55,13 +78,15 @@
             <ElButtonGroup>
               <ElButton 
                 :type="controls.cameraMode === 'day' ? 'primary' : 'default'"
-                @click="controls.cameraMode = 'day'"
+                :disabled="isSending"
+                @click="handleCameraModeChange('day')"
               >
                 白天
               </ElButton>
               <ElButton 
                 :type="controls.cameraMode === 'night' ? 'primary' : 'default'"
-                @click="controls.cameraMode = 'night'"
+                :disabled="isSending"
+                @click="handleCameraModeChange('night')"
               >
                 夜晚
               </ElButton>
@@ -75,25 +100,25 @@
           
           <div class="direction-control">
             <div class="direction-row">
-              <ElButton class="direction-btn" @click="handleDirection('up')">
+              <ElButton class="direction-btn" :disabled="isSending" @click="handleDirection('up')">
                 <Icon icon="ri:arrow-up-line" />
-                上转
+                前进
               </ElButton>
             </div>
             <div class="direction-row">
-              <ElButton class="direction-btn" @click="handleDirection('left')">
+              <ElButton class="direction-btn" :disabled="isSending" @click="handleDirection('left')">
                 <Icon icon="ri:arrow-left-line" />
                 左转
               </ElButton>
-              <ElButton class="direction-btn" @click="handleDirection('right')">
+              <ElButton class="direction-btn" :disabled="isSending" @click="handleDirection('right')">
                 <Icon icon="ri:arrow-right-line" />
                 右转
               </ElButton>
             </div>
             <div class="direction-row">
-              <ElButton class="direction-btn" @click="handleDirection('down')">
+              <ElButton class="direction-btn" :disabled="isSending" @click="handleDirection('down')">
                 <Icon icon="ri:arrow-down-line" />
-                下转
+                后退
               </ElButton>
             </div>
           </div>
@@ -112,6 +137,8 @@
 <script setup lang="ts">
   import { Icon } from '@iconify/vue'
   import { ElMessage } from 'element-plus'
+  import ArtVideoPlayer from '@/components/core/media/art-video-player/index.vue'
+  import { sendShipAction } from '@/api/drone'
 
   interface Props {
     visible: boolean
@@ -143,6 +170,39 @@
 
   // 当前时间
   const currentTime = ref('2026-02-19 20:45:40')
+  const playerKey = ref(1)
+  const isSending = ref(false)
+
+  const streamUrl = computed(() => props.deviceData?.streamUrl || '')
+
+  const resolvePorts = () => {
+    const shipPort = Number(props.deviceData?.shipPort)
+    const controlPort = Number(props.deviceData?.controlPort)
+
+    return {
+      shipPort: Number.isFinite(shipPort) && shipPort > 0 ? shipPort : 9001,
+      controlPort: Number.isFinite(controlPort) && controlPort > 0 ? controlPort : 9002
+    }
+  }
+
+  const dispatchCommand = async (cmd: string, successText: string) => {
+    if (isSending.value) {
+      return
+    }
+
+    isSending.value = true
+    const { shipPort, controlPort } = resolvePorts()
+    try {
+      await sendShipAction({
+        cmd,
+        shipPort,
+        controlPort
+      })
+      ElMessage.success(successText)
+    } finally {
+      isSending.value = false
+    }
+  }
 
   // 更新时间
   const updateTime = () => {
@@ -163,18 +223,67 @@
 
   // 刷新视频流
   const refreshStream = () => {
+    if (!streamUrl.value) {
+      ElMessage.warning('当前设备没有可用的直播拉流地址')
+      return
+    }
+    playerKey.value += 1
     ElMessage.info('正在刷新视频流...')
   }
 
   // 处理方向控制
-  const handleDirection = (direction: 'up' | 'down' | 'left' | 'right') => {
+  const handleDirection = async (direction: 'up' | 'down' | 'left' | 'right') => {
     const directionMap = {
       up: '前进',
       down: '后退',
       left: '左转',
       right: '右转'
     }
-    ElMessage.success(`船体${directionMap[direction]}指令已发送`)
+    await dispatchCommand(direction, `船体${directionMap[direction]}指令已发送`)
+  }
+
+  const handleSamplingChange = async (val: string | number | boolean) => {
+    const enabled = Boolean(val)
+    try {
+      await dispatchCommand(enabled ? 'sampling_on' : 'sampling_off', `采样装置已${enabled ? '开启' : '关闭'}`)
+    } catch {
+      controls.sampling = !enabled
+    }
+  }
+
+  const handleMonitoringChange = async (val: string | number | boolean) => {
+    const enabled = Boolean(val)
+    try {
+      await dispatchCommand(enabled ? 'monitoring_lift' : 'monitoring_recover', `环境监测仪器已${enabled ? '提起' : '回收'}`)
+    } catch {
+      controls.monitoring = !enabled
+    }
+  }
+
+  const handleInstrumentStatusChange = async (val: string | number | boolean) => {
+    const isNormal = Boolean(val)
+    try {
+      await dispatchCommand(
+        isNormal ? 'instrument_normal' : 'instrument_abnormal',
+        `环境仪器状态已设为${isNormal ? '正常' : '异常'}`
+      )
+    } catch {
+      controls.instrumentStatus = !isNormal
+    }
+  }
+
+  const handleCameraModeChange = async (mode: 'day' | 'night') => {
+    if (controls.cameraMode === mode) {
+      return
+    }
+
+    const prevMode = controls.cameraMode
+    controls.cameraMode = mode
+    try {
+      await dispatchCommand(mode === 'day' ? 'camera_normal' : 'camera_night', `摄像头已切换为${mode === 'day' ? '白天' : '夜晚'}模式`)
+    } catch {
+      controls.cameraMode = prevMode
+    }
   }
 
   // 关闭对话框
@@ -186,6 +295,7 @@
   watch(dialogVisible, (val) => {
     if (val) {
       updateTime()
+      playerKey.value += 1
       timer = setInterval(updateTime, 1000)
     } else {
       if (timer) {
@@ -267,6 +377,29 @@
         margin: 5px 0;
       }
     }
+  }
+
+  .video-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .stream-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  .video-sub-text {
+    font-size: 13px;
+    color: #ccc;
+    margin-top: 6px;
   }
 
   .control-panel {
