@@ -1,199 +1,164 @@
-# 🌊 无人船监测系统
+# 无人船监测系统
 
-一个完整的无人船监测系统，包含 Vue 3 前端和 Django 后端。
+一个前后端一体的无人船监测项目，前端基于 Vue 3 + TypeScript，后端基于 Django + DRF。
 
-## 📱 快速导航
+## 项目状态（2026-03）
 
-### 📚 文档
-- **项目完整说明**：查看 [项目使用说明.md](项目使用说明.md)
-- **Python 代码说明**：查看 [back-end/Python代码说明.md](back-end/Python代码说明.md)
+当前主干已包含以下能力：
 
-### 🚀 快速开始
+- 用户注册、登录、JWT 鉴权
+- 用户管理（列表、创建、编辑、注销）
+- 个人中心：头像上传、基础信息持久化（刷新不丢失）
+- 独立修改密码页（旧密码 + 短信验证码 + 新密码二次确认）
+- 无人船设备管理
+- 图片上传与图片传输历史管理（查询、查看、删除、批量删除）
+- 水质/营养盐分析数据接口与上传接口
 
-#### 方式 1：使用启动脚本（推荐）
-```bash
-# 查看交互式菜单
-bash start.sh
+## 目录结构
+
+```text
+seabot/
+├── art-design-pro/                  # 前端（Vue 3 + Vite + Element Plus）
+├── back-end/
+│   ├── test_upload_boat_images.py   # 本地图片批量上传测试脚本
+│   └── seadrone/
+│       ├── accounts/                # 认证、用户、设备、图片历史等 API
+│       ├── monitoring/              # 监测数据与船端网关相关 API
+│       ├── manage.py
+│       └── db.sqlite3
+├── README.md
+└── start.sh
 ```
 
-#### 方式 2：手动启动
+## 本地开发启动
 
-**启动后端：**
+### 1) 后端
+
 ```bash
-cd back-end/seadrone
-source ../../.venv/bin/activate
-python3 manage.py runserver 0.0.0.0:8000
+cd /Users/hanksgao/Desktop/seabot/back-end/seadrone
+
+# 使用项目虚拟环境
+source /Users/hanksgao/Desktop/seabot/.venv/bin/activate
+
+# 迁移数据库
+/Users/hanksgao/Desktop/seabot/.venv/bin/python manage.py migrate
+
+# 启动服务
+/Users/hanksgao/Desktop/seabot/.venv/bin/python manage.py runserver 0.0.0.0:8000
 ```
 
-**启动前端：**
+### 2) 前端
+
 ```bash
-cd art-design-pro
+cd /Users/hanksgao/Desktop/seabot/art-design-pro
+
+# 安装依赖（首次）
+pnpm install
+
+# 启动开发服务
 pnpm dev
 ```
 
-### 🔗 重要链接
+如果你的环境没有 `pnpm`，可改用：
 
-| 服务 | 地址 | 描述 |
-|------|------|------|
-| 🎨 前端应用 | http://localhost:5173 | Vue 3 + Element Plus UI |
-| 📡 后端 API | http://localhost:8000/api/ | Django REST Framework |
-| ⚙️ 后台管理 | http://localhost:8000/admin/ | Django 管理后台 |
-| 📚 文档中心 | http://localhost:5173/#/docs | 在线文档（启动前端后） |
-
-### 📋 创建示例数据
-bash start.sh
 ```bash
-cd back-end/seadrone
-source ../../.venv/bin/activate
-
-# 创建仪表板数据
-python3 create_dashboard_data.py
-
-# 创建示例设备
-python3 create_sample_devices.py
-
-# 创建监测数据
-python3 create_monitoring_data.py
+npm install
+npm run dev
 ```
 
-## 🏗️ 项目结构
+## 访问地址
 
-```
-seabot/
-├── art-design-pro/          # 前端项目（Vue 3 + TypeScript）
-├── back-end/                # 后端项目（Django + DRF）
-│   └── seadrone/
-│       ├── accounts/        # 用户认证和仪表板
-│       └── monitoring/      # 数据监测（水质、营养盐）
-├── 项目使用说明.md          # 完整项目说明
-└── start.sh                 # 快速启动脚本
-```
+- 前端：`http://localhost:5173`
+- 后端 API 根：`http://localhost:8000/api/`
+- Django Admin：`http://localhost:8000/admin/`
 
-## 🔐 默认用户
+## 常用账号初始化
 
-### 管理员账户
-需要通过以下命令创建：
+创建后台管理员：
+
 ```bash
-cd back-end/seadrone
-source ../../.venv/bin/activate
-python3 manage.py createsuperuser
+cd /Users/hanksgao/Desktop/seabot/back-end/seadrone
+/Users/hanksgao/Desktop/seabot/.venv/bin/python manage.py createsuperuser
 ```
 
-## 📡 API 快速参考
+## 关键 API 速查
 
-### 用户认证
-- `POST /api/register/` - 注册
-- `POST /api/login/` - 登录
-- `GET /api/user/info/` - 获取用户信息
+### 认证与用户
 
-### 仪表板
-- `GET /api/dashboard/stats/` - 统计数据
-- `GET /api/dashboard/sales/` - 销售数据
-- `GET /api/dashboard/growth/` - 用户增长
+- `POST /api/register/`
+- `POST /api/login/`
+- `GET /api/user/info/`
+- `POST /api/user/profile/update/`
+- `POST /api/user/avatar/upload/`
+
+### 修改密码（独立流程）
+
+- `POST /api/user/password/sms/send/`
+- `POST /api/user/password/sms/verify/`
+- `POST /api/user/password/change/`
+
+### 设备与图片历史
+
+- `GET /api/drone/list/`
+- `POST /api/drone/create/`
+- `POST /api/drone/update/`
+- `POST /api/drone/delete/`
+- `POST /api/drone/batch-delete/`
+- `POST /api/drone/upload-image/`
+- `GET /api/drone/image-history/list/`
+- `POST /api/drone/image-history/delete/`
+- `POST /api/drone/image-history/batch-delete/`
 
 ### 监测数据
-- `GET /api/analysis/water-quality/` - 水质数据
-- `GET /api/analysis/nutrient/` - 营养盐数据
-- `POST /api/upload/water-quality/` - 上传水质
-- `POST /api/upload/nutrient/` - 上传营养盐
 
-### 设备管理
-- `GET /api/drone/list/` - 设备列表
-- `POST /api/drone/create/` - 创建设备
-- `POST /api/drone/delete/` - 删除设备
-- `POST /api/drone/batch-delete/` - 批量删除
+- `GET /api/analysis/water-quality/`
+- `GET /api/analysis/nutrient/`
+- `POST /api/upload/water-quality/`
+- `POST /api/upload/nutrient/`
+- `POST /api/upload/ship-packet/`
 
-## 🛠️ 常用命令
+## 图片上传测试（本地目录 -> 后端）
+
+脚本：`back-end/test_upload_boat_images.py`
+
+示例：
 
 ```bash
-# Django 迁移
-python3 manage.py makemigrations
-python3 manage.py migrate
-
-# 创建超级用户
-python3 manage.py createsuperuser
-
-# Django Shell
-python3 manage.py shell
-
-# 查看数据库用户
-python3 check_users.py
-
-# 运行测试
-bash test_register.sh
-python3 test_upload.py
+/Users/hanksgao/Desktop/seabot/.venv/bin/python /Users/hanksgao/Desktop/seabot/back-end/test_upload_boat_images.py \
+	--base-url http://127.0.0.1:8000/api \
+	--username your_user \
+	--password your_pass \
+	--image-dir ~/Desktop/boat-image \
+	--ship-model DL-3022 \
+	--check-history
 ```
 
-## 📚 完整文档
+## 常见问题
 
-更详细的信息请参考：
+### 1) `migrate` 提示 models changed but no migration
 
-1. **[项目使用说明.md](项目使用说明.md)** - 完整的项目结构、API 文档、开发工作流
-2. **[back-end/Python代码说明.md](back-end/Python代码说明.md)** - Python 后端代码详解
-3. **前端文档中心** - 访问 http://localhost:5173/#/docs（启动前端后）
-
-## 🐛 常见问题
-
-### 端口被占用
 ```bash
-# 查找占用端口的进程
-lsof -i :8000
-
-# 删除数据库重新初始化
-rm back-end/seadrone/db.sqlite3
-cd back-end/seadrone
-python3 manage.py migrate
-python3 create_monitoring_data.py
+cd /Users/hanksgao/Desktop/seabot/back-end/seadrone
+/Users/hanksgao/Desktop/seabot/.venv/bin/python manage.py makemigrations accounts
+/Users/hanksgao/Desktop/seabot/.venv/bin/python manage.py migrate
 ```
 
-### 数据库错误
+### 2) 个人中心刷新后数据丢失
+
+请确认以下三点：
+
+- 已应用包含 `UserProfile` 扩展字段的迁移（`0011`）
+- 后端已重启到最新代码
+- 前端保存时接口返回成功（页面会提示“保存成功”）
+
+可用以下命令检查迁移：
+
 ```bash
-cd back-end/seadrone
-python3 manage.py flush
-python3 manage.py migrate
+/Users/hanksgao/Desktop/seabot/.venv/bin/python /Users/hanksgao/Desktop/seabot/back-end/seadrone/manage.py showmigrations accounts
 ```
 
-## 🎯 技术栈
+## 相关文档
 
-**前端：**
-- Vue 3
-- TypeScript
-- Element Plus
-- Vite
-- Pinia
-- Axios
-
-**后端：**
-- Django 5.2
-- Django REST Framework
-- djangorestframework-simplejwt
-- django-cors-headers
-- SQLite3
-
-## 📝 开发模式
-
-项目支持热更新：
-
-**前端热更新：**
-```bash
-cd art-design-pro
-pnpm dev
-# 修改代码后自动刷新
-```
-
-**后端自动重载：**
-```bash
-cd back-end/seadrone
-python3 manage.py runserver
-# Django 会自动检测文件变化
-```
-
-## 📞 获取帮助
-
-1. 查看在线文档：http://localhost:5173/#/docs
-2. 查看项目说明：[项目使用说明.md](项目使用说明.md)
-3. 检查后端日志：Django 输出显示详细的错误信息
-
----
-
-**Happy Coding! 🚀**
+- `项目使用说明.md`
+- `back-end/Python代码说明.md`
+- `md/` 目录下的专题文档（部署、联调、故障排查等）
