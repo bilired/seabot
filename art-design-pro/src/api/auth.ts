@@ -58,4 +58,44 @@ export function fetchUploadUserAvatar(file: File) {
   })
 }
 
+export function fetchUpdateUserProfile(data: {
+  realName: string
+  nickName: string
+  email: string
+  mobile: string
+  address: string
+  userGender: string
+  des: string
+}) {
+  return request.post<Api.Auth.UserInfo>({
+    url: '/api/user/profile/update/',
+    data
+  })
+}
+
+export function fetchSendChangePasswordSmsCode() {
+  return request.post<{ mobile: string }>({
+    url: '/api/user/password/sms/send/'
+  })
+}
+
+export function fetchVerifyChangePasswordSmsCode(data: { smsCode: string }) {
+  return request.post({
+    url: '/api/user/password/sms/verify/',
+    data
+  })
+}
+
+export function fetchChangePassword(data: {
+  oldPassword: string
+  smsCode: string
+  newPassword: string
+  confirmPassword: string
+}) {
+  return request.post({
+    url: '/api/user/password/change/',
+    data
+  })
+}
+
 

@@ -101,7 +101,13 @@ declare namespace Api {
       userId: number
       userName: string
       email: string
+      mobile?: string
       avatar?: string
+      realName?: string
+      nickName?: string
+      userGender?: string
+      address?: string
+      des?: string
     }
 
     interface UploadAvatarResponse {

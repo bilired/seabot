@@ -32,7 +32,7 @@
             </div>
             <div class="mt-2.5">
               <ArtSvgIcon icon="ri:user-3-line" class="text-g-700" />
-              <span class="ml-2 text-sm">{{ form.sex === '1' ? '男' : '女' }}</span>
+              <span class="ml-2 text-sm">{{ form.sex === '1' ? '男' : form.sex === '2' ? '女' : '未设置性别' }}</span>
             </div>
             <div class="mt-2.5">
               <ArtSvgIcon icon="ri:map-pin-line" class="text-g-700" />
@@ -109,7 +109,8 @@
             </ElFormItem>
 
             <div class="flex-c justify-end [&_.el-button]:!w-27.5">
-              <ElButton type="primary" class="w-22.5" v-ripple @click="edit">
+              <ElButton v-if="isEdit" :disabled="saving" v-ripple @click="cancelEdit">取消</ElButton>
+              <ElButton type="primary" class="w-22.5" :loading="saving" v-ripple @click="edit">
                 {{ isEdit ? '保存' : '编辑' }}
               </ElButton>
             </div>
@@ -118,41 +119,10 @@
 
         <div class="art-card-sm my-5">
           <h1 class="p-4 text-xl font-normal border-b border-g-300">更改密码</h1>
-
-          <ElForm :model="pwdForm" class="box-border p-5" label-width="86px" label-position="top">
-            <ElFormItem label="当前密码" prop="password">
-              <ElInput
-                v-model="pwdForm.password"
-                type="password"
-                :disabled="!isEditPwd"
-                show-password
-              />
-            </ElFormItem>
-
-            <ElFormItem label="新密码" prop="newPassword">
-              <ElInput
-                v-model="pwdForm.newPassword"
-                type="password"
-                :disabled="!isEditPwd"
-                show-password
-              />
-            </ElFormItem>
-
-            <ElFormItem label="确认新密码" prop="confirmPassword">
-              <ElInput
-                v-model="pwdForm.confirmPassword"
-                type="password"
-                :disabled="!isEditPwd"
-                show-password
-              />
-            </ElFormItem>
-
-            <div class="flex-c justify-end [&_.el-button]:!w-27.5">
-              <ElButton type="primary" class="w-22.5" v-ripple @click="editPwd">
-                {{ isEditPwd ? '保存' : '编辑' }}
-              </ElButton>
-            </div>
-          </ElForm>
+          <div class="box-border p-5 flex items-center justify-between max-md:block">
+            <div class="text-sm text-g-600 max-md:mb-3">为保障账户安全，请在独立页面完成旧密码、短信验证码和新密码设置。</div>
+            <ElButton type="primary" v-ripple @click="goChangePassword">前往修改密码</ElButton>
+          </div>
         </div>
       </div>
     </div>
@@ -161,13 +131,16 @@
 
 <script setup lang="ts">
   import avatarDefault from '@imgs/user/avatar.webp'
+  import { useRouter } from 'vue-router'
   import { useUserStore } from '@/store/modules/user'
-  import { fetchUploadUserAvatar } from '@/api/auth'
+  import { fetchGetUserInfo, fetchUploadUserAvatar, fetchUpdateUserProfile } from '@/api/auth'
+  import { HttpError } from '@/utils/http/error'
   import type { FormInstance, FormRules, UploadRequestOptions } from 'element-plus'
   import type { UploadAjaxError } from 'element-plus/es/components/upload/src/ajax'
 
   defineOptions({ name: 'UserCenter' })
 
+  const router = useRouter()
   const userStore = useUserStore()
   const userInfo = computed(() => userStore.getUserInfo)
   const avatarUploading = ref(false)
@@ -175,31 +148,48 @@
   const AVATAR_MAX_SIZE_MB = 5
 
   const isEdit = ref(false)
-  const isEditPwd = ref(false)
-  const date = ref('')
+  const saving = ref(false)
   const ruleFormRef = ref<FormInstance>()
 
   /**
    * 用户信息表单
    */
   const form = reactive({
-    realName: 'John Snow',
-    nikeName: '皮卡丘',
-    email: '59301283@mall.com',
-    mobile: '18888888888',
-    address: '广东省深圳市宝安区西乡街道101栋201',
-    sex: '2',
-    des: 'Art Design Pro 是一款兼具设计美学与高效开发的后台系统.'
+    realName: '',
+    nikeName: '',
+    email: '',
+    mobile: '',
+    address: '',
+    sex: '',
+    des: ''
   })
 
-  /**
-   * 密码修改表单
-   */
-  const pwdForm = reactive({
-    password: '123456',
-    newPassword: '123456',
-    confirmPassword: '123456'
-  })
+  const MOBILE_REGEXP = /^1\d{10}$/
+  const EMAIL_REGEXP = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+  const validateMobile = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+    if (!value) {
+      callback(new Error('请输入手机号码'))
+      return
+    }
+    if (!MOBILE_REGEXP.test(value)) {
+      callback(new Error('请输入正确的 11 位手机号'))
+      return
+    }
+    callback()
+  }
+
+  const validateEmail = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+    if (!value) {
+      callback(new Error('请输入邮箱'))
+      return
+    }
+    if (!EMAIL_REGEXP.test(value)) {
+      callback(new Error('请输入正确的邮箱格式'))
+      return
+    }
+    callback()
+  }
 
   /**
    * 表单验证规则
@@ -213,8 +203,8 @@
       { required: true, message: '请输入昵称', trigger: 'blur' },
       { min: 2, max: 50, message: '长度在 2 到 50 个字符', trigger: 'blur' }
     ],
-    email: [{ required: true, message: '请输入邮箱', trigger: 'blur' }],
-    mobile: [{ required: true, message: '请输入手机号码', trigger: 'blur' }],
+    email: [{ required: true, validator: validateEmail, trigger: 'blur' }],
+    mobile: [{ required: true, validator: validateMobile, trigger: 'blur' }],
     address: [{ required: true, message: '请输入地址', trigger: 'blur' }],
     sex: [{ required: true, message: '请选择性别', trigger: 'blur' }]
   })
@@ -234,7 +224,7 @@
 
   onMounted(() => {
     syncFormWithUserInfo()
-    getDate()
+    loadLatestUserInfo()
   })
 
   watch(
@@ -248,38 +238,83 @@
   )
 
   const syncFormWithUserInfo = () => {
-    const userName = userInfo.value?.userName || ''
-    form.realName = userName || form.realName
-    form.nikeName = form.nikeName || userName
-    form.email = userInfo.value?.email || form.email
+    const currentUser = userInfo.value || {}
+    form.realName = currentUser.realName || currentUser.userName || ''
+    form.nikeName = currentUser.nickName || currentUser.userName || ''
+    form.email = currentUser.email || ''
+    form.mobile = currentUser.mobile || ''
+    form.sex = currentUser.userGender || ''
+    form.address = currentUser.address || ''
+    form.des = currentUser.des || ''
   }
 
-  /**
-   * 根据当前时间获取问候语
-   */
-  const getDate = () => {
-    const h = new Date().getHours()
-
-    if (h >= 6 && h < 9) date.value = '早上好'
-    else if (h >= 9 && h < 11) date.value = '上午好'
-    else if (h >= 11 && h < 13) date.value = '中午好'
-    else if (h >= 13 && h < 18) date.value = '下午好'
-    else if (h >= 18 && h < 24) date.value = '晚上好'
-    else date.value = '很晚了，早点睡'
+  const loadLatestUserInfo = async () => {
+    try {
+      const latest = await fetchGetUserInfo()
+      userStore.setUserInfo({
+        ...(userStore.getUserInfo as Api.Auth.UserInfo),
+        ...latest
+      } as Api.Auth.UserInfo)
+      syncFormWithUserInfo()
+    } catch (error) {
+      console.error('获取最新个人信息失败:', error)
+    }
   }
 
   /**
    * 切换用户信息编辑状态
    */
-  const edit = () => {
-    isEdit.value = !isEdit.value
+  const edit = async () => {
+    if (!isEdit.value) {
+      isEdit.value = true
+      return
+    }
+
+    if (!ruleFormRef.value) {
+      return
+    }
+
+    try {
+      await ruleFormRef.value.validate()
+      saving.value = true
+
+      const latest = await fetchUpdateUserProfile({
+        realName: form.realName,
+        nickName: form.nikeName,
+        email: form.email,
+        mobile: form.mobile,
+        address: form.address,
+        userGender: form.sex,
+        des: form.des
+      })
+
+      userStore.setUserInfo({
+        ...(userStore.getUserInfo as Api.Auth.UserInfo),
+        ...latest
+      } as Api.Auth.UserInfo)
+
+      isEdit.value = false
+      ElMessage.success('保存成功')
+    } catch (error) {
+      if (error instanceof HttpError) {
+        ElMessage.error(error.message)
+      } else {
+        ElMessage.error('保存个人信息失败，请稍后重试')
+        console.error('保存个人信息失败:', error)
+      }
+    } finally {
+      saving.value = false
+    }
   }
 
-  /**
-   * 切换密码编辑状态
-   */
-  const editPwd = () => {
-    isEditPwd.value = !isEditPwd.value
+  const goChangePassword = () => {
+    router.push('/change-password')
+  }
+
+  const cancelEdit = () => {
+    syncFormWithUserInfo()
+    ruleFormRef.value?.clearValidate()
+    isEdit.value = false
   }
 
   const beforeAvatarUpload = (file: File) => {

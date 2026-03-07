@@ -23,6 +23,7 @@
       "docs": "使用文档",
       "github": "Github",
       "lockScreen": "锁定屏幕",
+      "changePassword": "修改密码",
       "logout": "退出登录"
     },
     "guide": {
@@ -299,9 +300,11 @@
     "system": {
       "title": "系统管理",
       "drone": "无人船设备管理",
+      "imageTransferHistory": "图片传输历史数据",
       "user": "用户管理",
       "role": "角色管理",
       "userCenter": "个人中心",
+      "changePassword": "修改密码",
       "menu": "菜单管理",
       "nested": "嵌套菜单",
       "menu1": "菜单1",

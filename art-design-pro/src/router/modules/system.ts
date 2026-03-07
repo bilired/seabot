@@ -24,6 +24,18 @@ export const userRoute: AppRouteRecord = {
   }
 }
 
+export const imageTransferHistoryRoute: AppRouteRecord = {
+  path: '/image-transfer-history',
+  name: 'ImageTransferHistory',
+  component: '/system/image-transfer-history',
+  meta: {
+    title: 'menus.system.imageTransferHistory',
+    icon: 'ri:image-2-line',
+    keepAlive: true,
+    roles: ['R_SUPER', 'R_ADMIN']
+  }
+}
+
 export const userCenterRoute: AppRouteRecord = {
   path: '/user-center',
   name: 'UserCenter',
@@ -31,6 +43,20 @@ export const userCenterRoute: AppRouteRecord = {
   meta: {
     title: 'menus.system.userCenter',
     icon: 'ri:user-line',
+    isHide: true,
+    keepAlive: true,
+    isHideTab: true,
+    roles: ['R_SUPER', 'R_ADMIN', 'R_USER']
+  }
+}
+
+export const changePasswordRoute: AppRouteRecord = {
+  path: '/change-password',
+  name: 'ChangePassword',
+  component: '/system/change-password',
+  meta: {
+    title: 'menus.system.changePassword',
+    icon: 'ri:lock-password-line',
     isHide: true,
     keepAlive: true,
     isHideTab: true,

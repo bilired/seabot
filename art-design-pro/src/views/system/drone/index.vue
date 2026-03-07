@@ -384,7 +384,7 @@
   const handleImageUpload = async (options: UploadRequestOptions) => {
     try {
       imageUploading.value = true
-      const result = await uploadDroneImage(options.file)
+      const result = await uploadDroneImage(options.file, formData.value.model)
       formData.value.image = result.url
       options.onSuccess?.(result)
       ElMessage.success('照片上传成功')

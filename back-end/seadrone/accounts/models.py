@@ -80,6 +80,11 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     avatar = models.CharField(max_length=500, blank=True, default='', help_text='头像URL')
     mobile = models.CharField(max_length=20, blank=True, default='', help_text='手机号')
+    real_name = models.CharField(max_length=50, blank=True, default='', help_text='姓名')
+    nick_name = models.CharField(max_length=50, blank=True, default='', help_text='昵称')
+    gender = models.CharField(max_length=2, blank=True, default='', help_text='性别编码：1男 2女')
+    address = models.CharField(max_length=255, blank=True, default='', help_text='地址')
+    description = models.TextField(blank=True, default='', help_text='个人介绍')
 
     class Meta:
         verbose_name = '用户扩展信息'
@@ -116,3 +121,32 @@ class DroneDevice(models.Model):
 
     def __str__(self):
         return f"{self.model}"
+
+
+class ImageTransferRecord(models.Model):
+    """图像传输历史记录"""
+
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='image_transfer_records',
+        null=True,
+        blank=True,
+        help_text='记录归属用户'
+    )
+    ship_model = models.CharField(max_length=50, default='未知型号', help_text='船型/设备型号')
+    image_uid = models.CharField(max_length=64, unique=True, help_text='图片唯一标识')
+    timestamp = models.DateTimeField(help_text='图片时间戳')
+    image_format = models.CharField(max_length=16, default='jpg', help_text='图片格式')
+    resolution = models.CharField(max_length=32, blank=True, default='', help_text='分辨率，例如1920x1080')
+    file_size_mb = models.FloatField(default=0, help_text='文件大小(MB)')
+    image_url = models.CharField(max_length=500, help_text='图片URL')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '图像传输记录'
+        verbose_name_plural = '图像传输记录'
+        ordering = ['-timestamp', '-id']
+
+    def __str__(self):
+        return f"{self.image_uid} ({self.ship_model})"

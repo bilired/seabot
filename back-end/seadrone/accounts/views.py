@@ -14,8 +14,9 @@ from django.core.files.storage import default_storage
 from uuid import uuid4
 import os
 import re
-from datetime import timedelta
-from .models import DashboardStats, UserActivity, DroneDevice, UserProfile
+from pathlib import Path
+from datetime import timedelta, datetime
+from .models import DashboardStats, UserActivity, DroneDevice, UserProfile, ImageTransferRecord
 from .sms_verify.service import send_sms_verify_code, check_sms_verify_code
 
 
@@ -37,6 +38,12 @@ def _is_mobile_registered(mobile: str) -> bool:
         UserProfile.objects.filter(user__is_active=True, mobile=mobile).exists()
         or User.objects.filter(is_active=True, last_name=mobile).exists()
     )
+
+
+def _get_user_mobile(user: User) -> str:
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    mobile = (profile.mobile or user.last_name or '').strip()
+    return mobile
 
 @api_view(['POST'])
 @permission_classes([])  # 允许任何人注册
@@ -239,8 +246,176 @@ def verify_register_sms_code_view(request):
     except Exception as e:
         return Response({
             "code": 500,
-            "msg": f"短信服务异常：{str(e)}"
+            "msg": f"短信验证服务异常：{str(e)}"
         }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def send_change_password_sms_code_view(request):
+    """已登录用户：发送修改密码短信验证码"""
+    mobile = _get_user_mobile(request.user)
+
+    if not mobile:
+        return Response({
+            "code": 400,
+            "msg": "当前账号未绑定手机号，请先在个人中心完善手机号"
+        }, status=status.HTTP_200_OK)
+
+    if not _is_valid_mobile(mobile):
+        return Response({
+            "code": 400,
+            "msg": "当前账号手机号格式不正确"
+        }, status=status.HTTP_200_OK)
+
+    try:
+        success, message, _ = send_sms_verify_code(mobile)
+    except Exception as e:
+        return Response({
+            "code": 500,
+            "msg": f"验证码发送异常：{str(e)}"
+        }, status=status.HTTP_200_OK)
+
+    if not success:
+        return Response({
+            "code": 400,
+            "msg": message or "验证码发送失败"
+        }, status=status.HTTP_200_OK)
+
+    masked_mobile = f"{mobile[:3]}****{mobile[-4:]}" if len(mobile) >= 7 else mobile
+    return Response({
+        "code": 200,
+        "msg": message or "验证码发送成功",
+        "data": {
+            "mobile": masked_mobile
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def verify_change_password_sms_code_view(request):
+    """已登录用户：校验修改密码短信验证码"""
+    sms_code = (request.data.get('smsCode') or request.data.get('verifyCode') or '').strip()
+    if not sms_code:
+        return Response({
+            "code": 400,
+            "msg": "验证码不能为空"
+        }, status=status.HTTP_200_OK)
+
+    mobile = _get_user_mobile(request.user)
+    if not mobile:
+        return Response({
+            "code": 400,
+            "msg": "当前账号未绑定手机号"
+        }, status=status.HTTP_200_OK)
+
+    try:
+        success, message, _ = check_sms_verify_code(mobile, sms_code)
+    except Exception as e:
+        return Response({
+            "code": 500,
+            "msg": f"验证码校验异常：{str(e)}"
+        }, status=status.HTTP_200_OK)
+
+    if not success:
+        return Response({
+            "code": 400,
+            "msg": message or "验证码校验失败"
+        }, status=status.HTTP_200_OK)
+
+    return Response({
+        "code": 200,
+        "msg": message or "验证码校验通过"
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password_view(request):
+    """已登录用户：修改密码（旧密码 + 短信验证码）"""
+    old_password = (request.data.get('oldPassword') or '').strip()
+    sms_code = (request.data.get('smsCode') or request.data.get('verifyCode') or '').strip()
+    new_password = request.data.get('newPassword') or ''
+    confirm_password = request.data.get('confirmPassword') or ''
+
+    if not old_password:
+        return Response({
+            "code": 400,
+            "msg": "旧密码不能为空"
+        }, status=status.HTTP_200_OK)
+
+    if not sms_code:
+        return Response({
+            "code": 400,
+            "msg": "验证码不能为空"
+        }, status=status.HTTP_200_OK)
+
+    if not new_password or not confirm_password:
+        return Response({
+            "code": 400,
+            "msg": "新密码和确认密码不能为空"
+        }, status=status.HTTP_200_OK)
+
+    if len(new_password) < 6:
+        return Response({
+            "code": 400,
+            "msg": "新密码长度不能少于 6 个字符"
+        }, status=status.HTTP_200_OK)
+
+    if new_password != confirm_password:
+        return Response({
+            "code": 400,
+            "msg": "两次新密码输入不一致"
+        }, status=status.HTTP_200_OK)
+
+    user = request.user
+    if not user.check_password(old_password):
+        return Response({
+            "code": 400,
+            "msg": "旧密码不正确"
+        }, status=status.HTTP_200_OK)
+
+    if old_password == new_password:
+        return Response({
+            "code": 400,
+            "msg": "新密码不能与旧密码相同"
+        }, status=status.HTTP_200_OK)
+
+    mobile = _get_user_mobile(user)
+    if not mobile:
+        return Response({
+            "code": 400,
+            "msg": "当前账号未绑定手机号"
+        }, status=status.HTTP_200_OK)
+
+    try:
+        verify_ok, verify_msg, _ = check_sms_verify_code(mobile, sms_code)
+    except Exception as e:
+        return Response({
+            "code": 500,
+            "msg": f"验证码校验异常：{str(e)}"
+        }, status=status.HTTP_200_OK)
+
+    if not verify_ok:
+        return Response({
+            "code": 400,
+            "msg": verify_msg or "验证码校验失败"
+        }, status=status.HTTP_200_OK)
+
+    user.set_password(new_password)
+    user.save(update_fields=['password'])
+
+    UserActivity.objects.create(
+        user=user,
+        activity_type='password_change',
+        description=f'{user.username} 修改了登录密码'
+    )
+
+    return Response({
+        "code": 200,
+        "msg": "密码修改成功，请重新登录"
+    }, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
@@ -298,8 +473,84 @@ def user_info_view(request):
             "email": user.email,
             "mobile": profile.mobile or user.last_name or '',
             "avatar": profile.avatar,
+            "realName": profile.real_name or user.username,
+            "nickName": profile.nick_name or user.username,
+            "userGender": profile.gender or '',
+            "address": profile.address or '',
+            "des": profile.description or '',
             "roles": ["R_ADMIN"],   # 返回管理员角色
             "buttons": []  # 按钮权限，后续可以实现
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_user_profile_view(request):
+    """当前登录用户：更新个人中心信息"""
+    user = request.user
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+
+    email = (request.data.get('email') or '').strip()
+    mobile = (request.data.get('mobile') or request.data.get('userPhone') or '').strip()
+    real_name = (request.data.get('realName') or '').strip()
+    nick_name = (request.data.get('nickName') or '').strip()
+    user_gender = str(request.data.get('userGender') or '').strip()
+    address = (request.data.get('address') or '').strip()
+    description = (request.data.get('des') or request.data.get('description') or '').strip()
+
+    if email and '@' not in email:
+        return Response({
+            "code": 400,
+            "msg": "邮箱格式不正确"
+        }, status=status.HTTP_200_OK)
+
+    if mobile and not _is_valid_mobile(mobile):
+        return Response({
+            "code": 400,
+            "msg": "手机号格式不正确"
+        }, status=status.HTTP_200_OK)
+
+    if user_gender and user_gender not in ['1', '2']:
+        return Response({
+            "code": 400,
+            "msg": "性别参数不正确"
+        }, status=status.HTTP_200_OK)
+
+    user.email = email
+    user.last_name = mobile
+    user.save(update_fields=['email', 'last_name'])
+
+    profile.mobile = mobile
+    profile.real_name = real_name
+    profile.nick_name = nick_name
+    profile.gender = user_gender
+    profile.address = address
+    profile.description = description
+    profile.save(update_fields=['mobile', 'real_name', 'nick_name', 'gender', 'address', 'description'])
+
+    UserActivity.objects.create(
+        user=user,
+        activity_type='other',
+        description=f'{user.username} 更新了个人资料'
+    )
+
+    return Response({
+        "code": 200,
+        "msg": "保存成功",
+        "data": {
+            "userId": user.id,
+            "userName": user.username,
+            "email": user.email,
+            "mobile": profile.mobile or user.last_name or '',
+            "avatar": profile.avatar,
+            "realName": profile.real_name or user.username,
+            "nickName": profile.nick_name or user.username,
+            "userGender": profile.gender or '',
+            "address": profile.address or '',
+            "des": profile.description or '',
+            "roles": ["R_ADMIN"],
+            "buttons": []
         }
     }, status=status.HTTP_200_OK)
 
@@ -387,6 +638,16 @@ def menu_list_view(request):
             }
         },
         {
+            "path": "/image-transfer-history",
+            "name": "ImageTransferHistory",
+            "component": "/system/image-transfer-history",
+            "meta": {
+                "title": "图片传输历史数据",
+                "icon": "ri:image-2-line",
+                "roles": ["R_ADMIN"]
+            }
+        },
+        {
             "path": "/user",
             "name": "User",
             "component": "/system/user",
@@ -403,6 +664,18 @@ def menu_list_view(request):
             "meta": {
                 "title": "个人中心",
                 "icon": "ri:user-line",
+                "roles": ["R_ADMIN", "R_USER"],
+                "isHide": True,
+                "isHideTab": True
+            }
+        },
+        {
+            "path": "/change-password",
+            "name": "ChangePassword",
+            "component": "/system/change-password",
+            "meta": {
+                "title": "修改密码",
+                "icon": "ri:lock-password-line",
                 "roles": ["R_ADMIN", "R_USER"],
                 "isHide": True,
                 "isHideTab": True
@@ -1016,11 +1289,152 @@ def upload_drone_image(request):
     if not image_url.startswith('http'):
         image_url = request.build_absolute_uri(image_url)
 
+    ship_model = (request.data.get('shipModel') or request.data.get('model') or '未知型号').strip() or '未知型号'
+    image_uid = uuid4().hex
+    image_format = Path(file.name).suffix.replace('.', '').lower() or 'jpg'
+    file_size_mb = round(float(file.size) / 1024 / 1024, 4)
+
+    ImageTransferRecord.objects.create(
+        owner=request.user,
+        ship_model=ship_model,
+        image_uid=image_uid,
+        timestamp=timezone.now(),
+        image_format=image_format,
+        resolution='',
+        file_size_mb=file_size_mb,
+        image_url=image_url
+    )
+
     return Response({
         "code": 200,
         "msg": "上传成功",
         "data": {
-            "url": image_url
+            "url": image_url,
+            "imageUid": image_uid
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_image_transfer_history(request):
+    """获取图片传输历史（真实后端记录）"""
+    try:
+        current = int(request.query_params.get('current', 1))
+        size = int(request.query_params.get('size', 10))
+
+        model = (request.query_params.get('model') or '').strip()
+        image_uid = (request.query_params.get('imageUid') or '').strip()
+        image_format = (request.query_params.get('imageFormat') or '').strip().lower()
+        start_time = (request.query_params.get('startTime') or '').strip()
+        end_time = (request.query_params.get('endTime') or '').strip()
+
+        queryset = ImageTransferRecord.objects.filter(owner=request.user)
+
+        if model:
+            queryset = queryset.filter(ship_model__icontains=model)
+        if image_uid:
+            queryset = queryset.filter(image_uid__icontains=image_uid)
+        if image_format:
+            queryset = queryset.filter(image_format__iexact=image_format)
+        if start_time:
+            try:
+                parsed_start = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S')
+                queryset = queryset.filter(timestamp__gte=parsed_start)
+            except ValueError:
+                return Response({
+                    "code": 400,
+                    "msg": "startTime 格式错误，要求 YYYY-MM-DD HH:mm:ss"
+                }, status=status.HTTP_200_OK)
+
+        if end_time:
+            try:
+                parsed_end = datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S')
+                queryset = queryset.filter(timestamp__lte=parsed_end)
+            except ValueError:
+                return Response({
+                    "code": 400,
+                    "msg": "endTime 格式错误，要求 YYYY-MM-DD HH:mm:ss"
+                }, status=status.HTTP_200_OK)
+
+        total = queryset.count()
+        start = (current - 1) * size
+        end = start + size
+        records = queryset.order_by('-timestamp', '-id')[start:end]
+
+        data = [
+            {
+                "id": str(item.id),
+                "shipModel": item.ship_model,
+                "imageUid": item.image_uid,
+                "timestamp": timezone.localtime(item.timestamp).strftime('%Y-%m-%d %H:%M:%S'),
+                "imageFormat": item.image_format,
+                "resolution": item.resolution,
+                "fileSizeMB": item.file_size_mb,
+                "imageUrl": item.image_url,
+            }
+            for item in records
+        ]
+
+        return Response({
+            "code": 200,
+            "msg": "获取成功",
+            "data": {
+                "records": data,
+                "current": current,
+                "size": size,
+                "total": total,
+            }
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            "code": 500,
+            "msg": f"获取图片传输历史失败: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def delete_image_transfer_record(request):
+    """删除单条图片传输历史"""
+    record_id = request.data.get('id')
+    if not record_id:
+        return Response({
+            "code": 400,
+            "msg": "记录ID不能为空"
+        }, status=status.HTTP_200_OK)
+
+    deleted, _ = ImageTransferRecord.objects.filter(id=record_id, owner=request.user).delete()
+    if deleted == 0:
+        return Response({
+            "code": 404,
+            "msg": "记录不存在"
+        }, status=status.HTTP_200_OK)
+
+    return Response({
+        "code": 200,
+        "msg": "删除成功"
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def batch_delete_image_transfer_records(request):
+    """批量删除图片传输历史"""
+    ids = request.data.get('ids')
+    if not isinstance(ids, list) or not ids:
+        return Response({
+            "code": 400,
+            "msg": "记录ID列表不能为空"
+        }, status=status.HTTP_200_OK)
+
+    deleted, _ = ImageTransferRecord.objects.filter(id__in=ids, owner=request.user).delete()
+
+    return Response({
+        "code": 200,
+        "msg": "删除成功",
+        "data": {
+            "deleted": deleted
         }
     }, status=status.HTTP_200_OK)
 

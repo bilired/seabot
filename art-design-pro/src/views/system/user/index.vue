@@ -45,10 +45,10 @@
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import { ACCOUNT_TABLE_DATA } from '@/mock/temp/formData'
   import { useTable } from '@/hooks/core/useTable'
-  import { fetchGetUserList } from '@/api/system-manage'
+  import { fetchDeleteUser, fetchGetUserList } from '@/api/system-manage'
   import UserSearch from './modules/user-search.vue'
   import UserDialog from './modules/user-dialog.vue'
-  import { ElTag, ElMessageBox, ElImage } from 'element-plus'
+  import { ElTag, ElMessageBox, ElImage, ElMessage } from 'element-plus'
   import { DialogType } from '@/types'
 
   defineOptions({ name: 'User' })
@@ -234,8 +234,15 @@
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'error'
-    }).then(() => {
+    }).then(async () => {
+      await fetchDeleteUser({ id: Number(row.id) })
       ElMessage.success('注销成功')
+      refreshData()
+    }).catch((error) => {
+      if (error !== 'cancel') {
+        console.error('注销失败:', error)
+        ElMessage.error('注销失败，请稍后重试')
+      }
     })
   }
 
