@@ -172,6 +172,75 @@ def parse_nutrient_payload(ship_model: str, input_text: str) -> dict:
     }
 
 
+def parse_boat_payload(input_text: str) -> dict:
+    """Parse type-B boat status payload.
+
+    Expected format (8 fields):
+    shipModel|boatTimestamp|status|latitude|longitude|speed|direction|batteryVoltage
+    """
+    parts = input_text.strip().split('|')
+    if len(parts) < 1 or not parts[0].strip():
+        raise ValueError('无效船体数据格式，缺少 shipModel 字段')
+
+    def _to_float(value: str):
+        return float(value) if value != '' else None
+
+    data = {
+        'ship_model': parts[0].strip(),
+        'raw': input_text.strip(),
+    }
+
+    if len(parts) >= 8:
+        data.update({
+            'boat_timestamp': parts[1] or None,
+            'status': parts[2] or None,
+            'latitude': _to_float(parts[3]),
+            'longitude': _to_float(parts[4]),
+            'speed': _to_float(parts[5]),
+            'direction': _to_float(parts[6]),
+            'battery_voltage': _to_float(parts[7]),
+        })
+
+    return data
+
+
+def parse_depth_payload(input_text: str) -> dict:
+    """Parse type-D depth payload.
+
+    Common format: depth|reserved
+    """
+    parts = input_text.strip().rstrip(':').split('|')
+    if not parts or parts[0] == '':
+        raise ValueError('无效深度数据格式，缺少 depth 字段')
+
+    return {
+        'depth': float(parts[0]),
+        'raw': input_text.strip(),
+    }
+
+
+def parse_rtk_payload(input_text: str) -> dict:
+    """Parse type-0 RTK payload.
+
+    Expected format (7 fields):
+    depth|RTKlatitude|RTKlatitude_direction|RTKlongitude|RTKlongitude_direction|temperature|RTKelevation
+    """
+    parts = input_text.strip().rstrip(':').split('|')
+    if len(parts) != 7:
+        raise ValueError(f'无效RTK数据格式，应有7个字段，实际收到 {len(parts)} 个')
+
+    return {
+        'depth': float(parts[0]) if parts[0] else None,
+        'rtk_latitude': float(parts[1]) if parts[1] else None,
+        'rtk_latitude_direction': parts[2] or None,
+        'rtk_longitude': float(parts[3]) if parts[3] else None,
+        'rtk_longitude_direction': parts[4] or None,
+        'temperature': float(parts[5]) if parts[5] else None,
+        'rtk_elevation': float(parts[6]) if parts[6] else None,
+        'raw': input_text.strip(),
+    }
+
+
 def generate_packet(command_type: bytes, direction_code: int) -> bytes:
     send_buff = bytearray()
     send_buff += b'$'
@@ -206,6 +275,9 @@ class ShipGatewayService:
         self.ship_count = ship_count
         self.ship_port_model_map = load_ship_port_model_map()
         self.reported_ship_model_by_port: Dict[int, str] = {}
+        self.last_boat_packet_by_port: Dict[int, dict] = {}
+        self.last_depth_packet_by_port: Dict[int, dict] = {}
+        self.last_rtk_packet_by_port: Dict[int, dict] = {}
         self.clients: Dict[int, socket.socket] = {}
         self._servers: List[socket.socket] = []
         self._threads: List[threading.Thread] = []
@@ -233,6 +305,9 @@ class ShipGatewayService:
                     pass
             self.clients.clear()
             self.reported_ship_model_by_port.clear()
+            self.last_boat_packet_by_port.clear()
+            self.last_depth_packet_by_port.clear()
+            self.last_rtk_packet_by_port.clear()
 
         for server in self._servers:
             try:
@@ -244,12 +319,26 @@ class ShipGatewayService:
     def status(self) -> dict:
         with self._lock:
             online_ports = sorted(self.clients.keys())
+            reported_models = {str(port): model for port, model in self.reported_ship_model_by_port.items()}
+            last_boat_packets = {
+                str(port): payload for port, payload in self.last_boat_packet_by_port.items()
+            }
+            last_depth_packets = {
+                str(port): payload for port, payload in self.last_depth_packet_by_port.items()
+            }
+            last_rtk_packets = {
+                str(port): payload for port, payload in self.last_rtk_packet_by_port.items()
+            }
         return {
             'running': self._running,
             'host': self.host,
             'port_start': self.port_start,
             'ship_count': self.ship_count,
             'online_ports': online_ports,
+            'reported_models': reported_models,
+            'last_boat_packets': last_boat_packets,
+            'last_depth_packets': last_depth_packets,
+            'last_rtk_packets': last_rtk_packets,
         }
 
     def send_action(self, cmd: str, ship_port: int, control_port: int) -> dict:
@@ -335,6 +424,9 @@ class ShipGatewayService:
                 if self.clients.get(port) is client:
                     self.clients.pop(port, None)
                 self.reported_ship_model_by_port.pop(port, None)
+                self.last_boat_packet_by_port.pop(port, None)
+                self.last_depth_packet_by_port.pop(port, None)
+                self.last_rtk_packet_by_port.pop(port, None)
             try:
                 client.close()
             except Exception:
@@ -357,11 +449,14 @@ class ShipGatewayService:
         for packet in packets:
             if packet['packet_type'] != 'B':
                 continue
-            reported = self._extract_ship_model_from_boat_packet(packet['payload_text'])
-            if not reported:
-                continue
-            with self._lock:
-                self.reported_ship_model_by_port[ship_port] = reported
+            try:
+                boat_payload = parse_boat_payload(packet['payload_text'])
+                reported = boat_payload['ship_model']
+                with self._lock:
+                    self.reported_ship_model_by_port[ship_port] = reported
+                    self.last_boat_packet_by_port[ship_port] = boat_payload
+            except Exception as exc:
+                logger.warning('Parse boat packet failed on port %s: %s', ship_port, exc)
 
         ship_model = self._resolve_ship_model(ship_port)
         for packet in packets:
@@ -373,6 +468,14 @@ class ShipGatewayService:
                 elif packet_type in ('Y', '@'):
                     model_data = parse_nutrient_payload(ship_model, packet['payload_text'])
                     NutrientData.objects.create(**model_data)
+                elif packet_type == 'D':
+                    depth_payload = parse_depth_payload(packet['payload_text'])
+                    with self._lock:
+                        self.last_depth_packet_by_port[ship_port] = depth_payload
+                elif packet_type == '0':
+                    rtk_payload = parse_rtk_payload(packet['payload_text'])
+                    with self._lock:
+                        self.last_rtk_packet_by_port[ship_port] = rtk_payload
             except Exception as exc:
                 logger.warning('Persist packet failed on port %s type %s: %s', ship_port, packet_type, exc)
 

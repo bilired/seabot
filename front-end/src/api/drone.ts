@@ -66,6 +66,40 @@ export interface ShipActionResult {
   failed_ports: number[]
 }
 
+export interface ShipGatewayStatusData {
+  running: boolean
+  host: string
+  port_start: number
+  ship_count: number
+  online_ports: number[]
+  reported_models?: Record<string, string>
+  last_boat_packets?: Record<string, {
+    ship_model: string
+    boat_timestamp?: string | null
+    status?: string | null
+    latitude?: number | null
+    longitude?: number | null
+    speed?: number | null
+    direction?: number | null
+    battery_voltage?: number | null
+    raw: string
+  }>
+  last_depth_packets?: Record<string, {
+    depth: number
+    raw: string
+  }>
+  last_rtk_packets?: Record<string, {
+    depth?: number | null
+    rtk_latitude?: number | null
+    rtk_latitude_direction?: string | null
+    rtk_longitude?: number | null
+    rtk_longitude_direction?: string | null
+    temperature?: number | null
+    rtk_elevation?: number | null
+    raw: string
+  }>
+}
+
 export function fetchDroneList(params: { current: number; size: number; keyword?: string }) {
   return request.get<DroneListResponse>({
     url: '/api/drone/list/',
@@ -118,6 +152,12 @@ export function sendShipAction(data: ShipActionParams) {
   return request.post<ShipActionResult>({
     url: '/api/ship/action/',
     data
+  })
+}
+
+export function fetchShipGatewayStatus() {
+  return request.get<ShipGatewayStatusData>({
+    url: '/api/ship/gateway/status/'
   })
 }
 

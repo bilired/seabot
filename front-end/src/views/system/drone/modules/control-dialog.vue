@@ -39,10 +39,32 @@
 
       <!-- 右侧：控制面板 -->
       <div class="control-panel">
+        <div class="gateway-status">
+          <div class="gateway-row">
+            <span>网关状态:</span>
+            <ElTag :type="gatewayRunning ? 'success' : 'danger'" size="small">
+              {{ gatewayRunning ? '运行中' : '未运行' }}
+            </ElTag>
+          </div>
+          <div class="gateway-row">
+            <span>目标端口:</span>
+            <span class="gateway-value"
+              >ship {{ resolvePorts().shipPort }} / control {{ resolvePorts().controlPort }}</span
+            >
+          </div>
+          <div class="gateway-row">
+            <span>在线端口:</span>
+            <span class="gateway-value">{{
+              gatewayLoading ? '加载中...' : gatewayStatus?.online_ports?.join(', ') || '无'
+            }}</span>
+          </div>
+          <p v-if="gatewayError" class="gateway-help">{{ gatewayError }}</p>
+        </div>
+
         <!-- 载荷设备控制和参数修正 -->
         <div class="control-section">
           <h4>载荷设备控制和参数修正</h4>
-          
+
           <div class="control-item">
             <label>采样装置:</label>
             <ElSwitch
@@ -76,14 +98,14 @@
           <div class="control-item">
             <label>摄像头模式:</label>
             <ElButtonGroup>
-              <ElButton 
+              <ElButton
                 :type="controls.cameraMode === 'day' ? 'primary' : 'default'"
                 :disabled="isSending"
                 @click="handleCameraModeChange('day')"
               >
                 白天
               </ElButton>
-              <ElButton 
+              <ElButton
                 :type="controls.cameraMode === 'night' ? 'primary' : 'default'"
                 :disabled="isSending"
                 @click="handleCameraModeChange('night')"
@@ -97,7 +119,7 @@
         <!-- 船体航行修正 -->
         <div class="control-section">
           <h4>船体航行修正</h4>
-          
+
           <div class="direction-control">
             <div class="direction-row">
               <ElButton class="direction-btn" :disabled="isSending" @click="handleDirection('up')">
@@ -106,17 +128,29 @@
               </ElButton>
             </div>
             <div class="direction-row">
-              <ElButton class="direction-btn" :disabled="isSending" @click="handleDirection('left')">
+              <ElButton
+                class="direction-btn"
+                :disabled="isSending"
+                @click="handleDirection('left')"
+              >
                 <Icon icon="ri:arrow-left-line" />
                 左转
               </ElButton>
-              <ElButton class="direction-btn" :disabled="isSending" @click="handleDirection('right')">
+              <ElButton
+                class="direction-btn"
+                :disabled="isSending"
+                @click="handleDirection('right')"
+              >
                 <Icon icon="ri:arrow-right-line" />
                 右转
               </ElButton>
             </div>
             <div class="direction-row">
-              <ElButton class="direction-btn" :disabled="isSending" @click="handleDirection('down')">
+              <ElButton
+                class="direction-btn"
+                :disabled="isSending"
+                @click="handleDirection('down')"
+              >
                 <Icon icon="ri:arrow-down-line" />
                 后退
               </ElButton>
@@ -138,7 +172,7 @@
   import { Icon } from '@iconify/vue'
   import { ElMessage } from 'element-plus'
   import ArtVideoPlayer from '@/components/core/media/art-video-player/index.vue'
-  import { sendShipAction } from '@/api/drone'
+  import { fetchShipGatewayStatus, sendShipAction, type ShipGatewayStatusData } from '@/api/drone'
 
   interface Props {
     visible: boolean
@@ -172,8 +206,13 @@
   const currentTime = ref('2026-02-19 20:45:40')
   const playerKey = ref(1)
   const isSending = ref(false)
+  const gatewayStatus = ref<ShipGatewayStatusData | null>(null)
+  const gatewayLoading = ref(false)
+  const gatewayError = ref('')
 
   const streamUrl = computed(() => props.deviceData?.streamUrl || '')
+  const gatewayRunning = computed(() => Boolean(gatewayStatus.value?.running))
+  const onlinePorts = computed(() => new Set(gatewayStatus.value?.online_ports || []))
 
   const resolvePorts = () => {
     const shipPort = Number(props.deviceData?.shipPort)
@@ -185,6 +224,21 @@
     }
   }
 
+  const isPortOnline = (port: number) => onlinePorts.value.has(port)
+
+  const loadGatewayStatus = async () => {
+    gatewayLoading.value = true
+    try {
+      gatewayStatus.value = await fetchShipGatewayStatus()
+      gatewayError.value = ''
+    } catch (error) {
+      gatewayError.value = '网关状态获取失败'
+      console.error('获取网关状态失败:', error)
+    } finally {
+      gatewayLoading.value = false
+    }
+  }
+
   const dispatchCommand = async (cmd: string, successText: string) => {
     if (isSending.value) {
       return
@@ -193,6 +247,18 @@
     isSending.value = true
     const { shipPort, controlPort } = resolvePorts()
     try {
+      await loadGatewayStatus()
+
+      if (!gatewayRunning.value) {
+        ElMessage.warning('网关未运行，请先启动网关服务')
+        return
+      }
+
+      if (!isPortOnline(shipPort) && !isPortOnline(controlPort)) {
+        ElMessage.warning(`设备未在线（ship:${shipPort}, control:${controlPort}）`)
+        return
+      }
+
       await sendShipAction({
         cmd,
         shipPort,
@@ -207,19 +273,22 @@
   // 更新时间
   const updateTime = () => {
     const now = new Date()
-    currentTime.value = now.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    }).replace(/\//g, '-')
+    currentTime.value = now
+      .toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      })
+      .replace(/\//g, '-')
   }
 
   // 定时器
-  let timer: NodeJS.Timeout | null = null
+  let timer: ReturnType<typeof setInterval> | null = null
+  let gatewayTimer: ReturnType<typeof setInterval> | null = null
 
   // 刷新视频流
   const refreshStream = () => {
@@ -245,7 +314,10 @@
   const handleSamplingChange = async (val: string | number | boolean) => {
     const enabled = Boolean(val)
     try {
-      await dispatchCommand(enabled ? 'sampling_on' : 'sampling_off', `采样装置已${enabled ? '开启' : '关闭'}`)
+      await dispatchCommand(
+        enabled ? 'sampling_on' : 'sampling_off',
+        `采样装置已${enabled ? '开启' : '关闭'}`
+      )
     } catch {
       controls.sampling = !enabled
     }
@@ -254,7 +326,10 @@
   const handleMonitoringChange = async (val: string | number | boolean) => {
     const enabled = Boolean(val)
     try {
-      await dispatchCommand(enabled ? 'monitoring_lift' : 'monitoring_recover', `环境监测仪器已${enabled ? '提起' : '回收'}`)
+      await dispatchCommand(
+        enabled ? 'monitoring_lift' : 'monitoring_recover',
+        `环境监测仪器已${enabled ? '提起' : '回收'}`
+      )
     } catch {
       controls.monitoring = !enabled
     }
@@ -280,7 +355,10 @@
     const prevMode = controls.cameraMode
     controls.cameraMode = mode
     try {
-      await dispatchCommand(mode === 'day' ? 'camera_normal' : 'camera_night', `摄像头已切换为${mode === 'day' ? '白天' : '夜晚'}模式`)
+      await dispatchCommand(
+        mode === 'day' ? 'camera_normal' : 'camera_night',
+        `摄像头已切换为${mode === 'day' ? '白天' : '夜晚'}模式`
+      )
     } catch {
       controls.cameraMode = prevMode
     }
@@ -297,10 +375,18 @@
       updateTime()
       playerKey.value += 1
       timer = setInterval(updateTime, 1000)
+      void loadGatewayStatus()
+      gatewayTimer = setInterval(() => {
+        void loadGatewayStatus()
+      }, 3000)
     } else {
       if (timer) {
         clearInterval(timer)
         timer = null
+      }
+      if (gatewayTimer) {
+        clearInterval(gatewayTimer)
+        gatewayTimer = null
       }
     }
   })
@@ -309,6 +395,9 @@
   onUnmounted(() => {
     if (timer) {
       clearInterval(timer)
+    }
+    if (gatewayTimer) {
+      clearInterval(gatewayTimer)
     }
   })
 </script>
@@ -409,6 +498,35 @@
     gap: 30px;
   }
 
+  .gateway-status {
+    padding: 12px;
+    border: 1px solid #ebeef5;
+    border-radius: 8px;
+    background: #fafafa;
+
+    .gateway-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #333;
+    }
+
+    .gateway-value {
+      color: #606266;
+      max-width: 220px;
+      text-align: right;
+      word-break: break-all;
+    }
+
+    .gateway-help {
+      margin: 4px 0 0;
+      color: #f56c6c;
+      font-size: 12px;
+    }
+  }
+
   .control-section {
     h4 {
       font-size: 16px;
@@ -459,5 +577,4 @@
     display: flex;
     justify-content: flex-end;
   }
-
 </style>

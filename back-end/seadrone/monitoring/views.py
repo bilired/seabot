@@ -5,7 +5,15 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
 from django.utils import timezone
 from .models import WaterQualityData, NutrientData
-from .ship_gateway import gateway_service, parse_packets, parse_water_payload, parse_nutrient_payload
+from .ship_gateway import (
+    gateway_service,
+    parse_packets,
+    parse_water_payload,
+    parse_nutrient_payload,
+    parse_boat_payload,
+    parse_depth_payload,
+    parse_rtk_payload,
+)
 
 
 @api_view(['GET'])
@@ -217,6 +225,9 @@ def upload_ship_packet_data(request):
         saved = {
             'water': 0,
             'nutrient': 0,
+            'boat': 0,
+            'depth': 0,
+            'rtk': 0,
         }
 
         for packet in packets:
@@ -229,6 +240,16 @@ def upload_ship_packet_data(request):
                 model_data = parse_nutrient_payload(str(ship_port), packet['payload_text'])
                 NutrientData.objects.create(**model_data)
                 saved['nutrient'] += 1
+            elif packet_type == 'B':
+                # Type-B is boat status/identity packet; parse for protocol validation.
+                parse_boat_payload(packet['payload_text'])
+                saved['boat'] += 1
+            elif packet_type == 'D':
+                parse_depth_payload(packet['payload_text'])
+                saved['depth'] += 1
+            elif packet_type == '0':
+                parse_rtk_payload(packet['payload_text'])
+                saved['rtk'] += 1
 
         return Response({
             "code": 200,
