@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 def load_ship_port_model_map() -> Dict[str, str]:
     default_map = {
         '9001': 'DL-3022',
+        '9003': 'DL-3026',
     }
 
     raw = os.getenv('SHIP_PORT_MODEL_MAP', '').strip()
@@ -304,7 +305,11 @@ class ShipGatewayService:
         try:
             client.send(b'Ready')
             while self._running:
-                data = client.recv(1024)
+                try:
+                    data = client.recv(1024)
+                except (ConnectionResetError, BrokenPipeError, OSError):
+                    # Peer closed/reset connection, stop this client loop quietly.
+                    break
                 if not data:
                     break
 

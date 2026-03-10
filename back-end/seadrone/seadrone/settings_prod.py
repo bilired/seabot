@@ -12,6 +12,7 @@ from .settings import *
 
 # ===== 项目根路径 =====
 BASE_DIR = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(os.environ.get('PROJECT_ROOT', BASE_DIR.parent.parent))
 
 # ===== 1. 安全设置 =====
 DEBUG = False
@@ -78,10 +79,10 @@ DATABASES = {
 
 # ===== 3. 静态文件和媒体文件配置 =====
 STATIC_URL = '/static/'
-STATIC_ROOT = '/home/wwwroot/yunpingtai.cc/static/'
+STATIC_ROOT = str(PROJECT_ROOT / 'static')
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = '/home/wwwroot/yunpingtai.cc/media/'
+MEDIA_ROOT = str(PROJECT_ROOT / 'media')
 
 # ===== 4. 日志配置 =====
 LOGGING = {
@@ -115,7 +116,7 @@ LOGGING = {
         'django_file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': '/home/wwwroot/yunpingtai.cc/logs/django.log',
+            'filename': str(PROJECT_ROOT / 'logs' / 'django.log'),
             'maxBytes': 1024 * 1024 * 10,  # 10 MB
             'backupCount': 5,
             'formatter': 'verbose',
@@ -123,7 +124,7 @@ LOGGING = {
         'gunicorn_access_file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': '/home/wwwroot/yunpingtai.cc/logs/gunicorn_access.log',
+            'filename': str(PROJECT_ROOT / 'logs' / 'gunicorn_access.log'),
             'maxBytes': 1024 * 1024 * 10,
             'backupCount': 5,
             'formatter': 'verbose',
@@ -131,7 +132,7 @@ LOGGING = {
         'gunicorn_error_file': {
             'level': 'ERROR',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': '/home/wwwroot/yunpingtai.cc/logs/gunicorn_error.log',
+            'filename': str(PROJECT_ROOT / 'logs' / 'gunicorn_error.log'),
             'maxBytes': 1024 * 1024 * 10,
             'backupCount': 5,
             'formatter': 'verbose',

@@ -141,8 +141,10 @@ pip install django-cors-headers==4.9.0
 pip install gunicorn==23.0.0
 pip install mysqlclient==2.2.4
 pip install psycopg2-binary==2.9.10  # PostgreSQL
-pip install alibabacloud_dysmsapi20170525
+pip install alibabacloud_dypnsapi20170525
+pip install alibabacloud_credentials
 pip install alibabacloud_tea_openapi
+pip install alibabacloud_tea_util
 
 # 2.3 后端环境变量
 log_info "配置后端环境变量..."
