@@ -18,6 +18,7 @@ from pathlib import Path
 from datetime import timedelta, datetime
 from .models import DashboardStats, UserActivity, DroneDevice, UserProfile, ImageTransferRecord
 from .sms_verify.service import send_sms_verify_code, check_sms_verify_code
+from monitoring.ship_gateway import gateway_service
 
 
 MOBILE_PATTERN = re.compile(r'^1\d{10}$')
@@ -1061,6 +1062,22 @@ def get_drone_list(request):
         size = int(request.query_params.get('size', 10))
         keyword = request.query_params.get('keyword')
 
+        def normalize_model(model: str) -> str:
+            return (model or '').strip().upper()
+
+        gateway_status = gateway_service.status()
+        online_ports = set(gateway_status.get('online_ports') or [])
+        reported_models = gateway_status.get('reported_models') or {}
+
+        # Build online model set from connected ports. Prefer reported model from B packet,
+        # fallback to static port-model map so UI stays consistent across pages.
+        online_models = set()
+        for port in online_ports:
+            port_str = str(port)
+            model = reported_models.get(port_str) or gateway_service.ship_port_model_map.get(port_str, '')
+            if model:
+                online_models.add(normalize_model(model))
+
         queryset = DroneDevice.objects.filter(owner=request.user)
         if keyword:
             queryset = queryset.filter(Q(model__icontains=keyword) | Q(ship_type__icontains=keyword))
@@ -1072,6 +1089,7 @@ def get_drone_list(request):
 
         records = []
         for item in devices:
+            realtime_status = 'online' if normalize_model(item.model) in online_models else 'offline'
             records.append({
                 "id": str(item.id),
                 "shipType": item.ship_type,
@@ -1081,7 +1099,8 @@ def get_drone_list(request):
                 "functions": item.functions,
                 "image": item.image,
                 "streamUrl": item.stream_url,
-                "status": item.status,
+                "status": realtime_status,
+                "savedStatus": item.status,
                 "maxSpeed": item.max_speed
             })
 
@@ -1265,7 +1284,7 @@ def batch_delete_drone(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([])
 def upload_drone_image(request):
     """上传无人船照片"""
     file = request.FILES.get('file')
@@ -1289,13 +1308,34 @@ def upload_drone_image(request):
     if not image_url.startswith('http'):
         image_url = request.build_absolute_uri(image_url)
 
-    ship_model = (request.data.get('shipModel') or request.data.get('model') or '未知型号').strip() or '未知型号'
+    ship_port_raw = request.data.get('shipPort')
+    ship_port = None
+    try:
+        ship_port = int(ship_port_raw) if ship_port_raw not in (None, '') else None
+    except (TypeError, ValueError):
+        ship_port = None
+
+    ship_model = (request.data.get('shipModel') or request.data.get('model') or '').strip()
+    if not ship_model and ship_port is not None:
+        gateway_status = gateway_service.status()
+        reported_models = gateway_status.get('reported_models') or {}
+        ship_model = (
+            reported_models.get(str(ship_port))
+            or gateway_service.ship_port_model_map.get(str(ship_port), '')
+        ).strip()
+
+    ship_model = ship_model or '未知型号'
     image_uid = uuid4().hex
     image_format = Path(file.name).suffix.replace('.', '').lower() or 'jpg'
     file_size_mb = round(float(file.size) / 1024 / 1024, 4)
 
+    matched_device = DroneDevice.objects.filter(model__iexact=ship_model).order_by('-updated_at', '-id').first()
+    owner = request.user if getattr(request.user, 'is_authenticated', False) else None
+    if owner is None and matched_device is not None:
+        owner = matched_device.owner
+
     ImageTransferRecord.objects.create(
-        owner=request.user,
+        owner=owner,
         ship_model=ship_model,
         image_uid=image_uid,
         timestamp=timezone.now(),
@@ -1304,6 +1344,10 @@ def upload_drone_image(request):
         file_size_mb=file_size_mb,
         image_url=image_url
     )
+
+    if matched_device is not None:
+        matched_device.image = image_url
+        matched_device.save(update_fields=['image', 'updated_at'])
 
     return Response({
         "code": 200,

@@ -3,8 +3,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
+from datetime import datetime, timedelta
+
 from django.utils import timezone
-from .models import WaterQualityData, NutrientData
+from .models import BoatTrackRecord, WaterQualityData, NutrientData
 from .ship_gateway import (
     gateway_service,
     parse_packets,
@@ -25,7 +27,7 @@ def get_water_quality_data(request):
     """
     try:
         # 获取最新的100条数据
-        water_data = WaterQualityData.objects.all()[:100]
+        water_data = WaterQualityData.objects.all()[:200]
         
         data_list = []
         for item in water_data:
@@ -62,8 +64,8 @@ def get_nutrient_data(request):
     返回：营养盐数据列表
     """
     try:
-        # 获取最新的20条数据
-        nutrient_data = NutrientData.objects.all()[:20]
+        # 获取最新的200条数据
+        nutrient_data = NutrientData.objects.all()[:200]
         
         data_list = []
         for item in nutrient_data:
@@ -332,4 +334,64 @@ def ship_action(request):
         return Response({
             "code": 500,
             "msg": f"发送失败: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([])
+def ship_track_history(request):
+    """查询船体轨迹历史记录（数据库持久化）"""
+    try:
+        ship_model = (request.query_params.get('shipModel') or '').strip()
+        ship_port = request.query_params.get('shipPort')
+        days = int(request.query_params.get('days', 7))
+        days = max(1, min(days, 30))
+
+        start_date = request.query_params.get('startDate')
+        end_date = request.query_params.get('endDate')
+
+        queryset = BoatTrackRecord.objects.all()
+        if ship_model:
+            queryset = queryset.filter(ship_model__iexact=ship_model)
+        if ship_port not in (None, ''):
+            queryset = queryset.filter(ship_port=int(ship_port))
+
+        if start_date:
+            start_dt = timezone.make_aware(datetime.strptime(start_date, '%Y-%m-%d'))
+            queryset = queryset.filter(recorded_at__gte=start_dt)
+        if end_date:
+            end_dt = timezone.make_aware(datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1))
+            queryset = queryset.filter(recorded_at__lt=end_dt)
+
+        if not start_date and not end_date:
+            since = timezone.now() - timedelta(days=days)
+            queryset = queryset.filter(recorded_at__gte=since)
+
+        records = queryset.order_by('recorded_at')[:10000]
+        data = []
+        for item in records:
+            data.append({
+                'id': item.id,
+                'shipModel': item.ship_model,
+                'shipPort': item.ship_port,
+                'boatTimestamp': item.boat_timestamp,
+                'deviceTime': timezone.localtime(item.device_time).strftime('%Y-%m-%d %H:%M:%S') if item.device_time else None,
+                'status': item.status,
+                'latitude': item.latitude,
+                'longitude': item.longitude,
+                'speed': item.speed,
+                'direction': item.direction,
+                'batteryVoltage': item.battery_voltage,
+                'recordedAt': timezone.localtime(item.recorded_at).strftime('%Y-%m-%d %H:%M:%S'),
+            })
+
+        return Response({
+            'code': 200,
+            'msg': '获取成功',
+            'data': data,
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({
+            'code': 500,
+            'msg': f'获取轨迹失败: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

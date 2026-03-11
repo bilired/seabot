@@ -8,28 +8,64 @@
     class="track-dialog"
   >
     <div class="track-container">
-      <!-- 左侧：时间选择列表 -->
       <div class="time-list-section">
         <div class="time-list-header">
-          <h4>{{ deviceData?.id || '11' }}</h4>
+          <h4>{{ deviceData?.model || deviceData?.id || '设备轨迹' }}</h4>
         </div>
         <div class="time-list">
           <div
-            v-for="(item, index) in trackHistory"
-            :key="index"
+            v-for="(item, index) in dailyTracks"
+            :key="item.date"
             class="time-item"
             :class="{ active: selectedTrackIndex === index }"
             @click="selectTrack(index)"
           >
             <Icon icon="ri:download-line" class="time-icon" />
-            <span class="time-text">{{ item.time }}</span>
+            <span class="time-text">{{ item.date }}</span>
+            <span class="time-count">{{ item.points.length }}点</span>
           </div>
         </div>
       </div>
 
-      <!-- 右侧：地图显示 -->
       <div class="map-section">
         <div id="track-map" class="track-map"></div>
+
+        <div v-if="currentDayTrack && currentDayTrack.points.length" class="timeline-panel">
+          <div class="timeline-meta">
+            <span>{{ currentDayTrack.date }}</span>
+            <span>{{ progressValue + 1 }} / {{ currentDayTrack.points.length }}</span>
+          </div>
+
+          <div class="timeline-controls">
+            <ElButton size="small" type="primary" @click="togglePlayback">
+              {{ isPlaying ? '暂停回放' : '播放回放' }}
+            </ElButton>
+            <ElButton size="small" @click="resetPlayback">回到起点</ElButton>
+          </div>
+
+          <div class="timeline-ruler" v-if="timelineMarks.length">
+            <div
+              v-for="(mark, idx) in timelineMarks"
+              :key="`${mark.index}-${mark.label}`"
+              class="timeline-ruler-item"
+              :class="{ first: idx === 0, last: idx === timelineMarks.length - 1 }"
+              :style="{ left: `${mark.left}%` }"
+            >
+              <span class="tick"></span>
+              <span class="label">{{ mark.label }}</span>
+            </div>
+          </div>
+
+          <ElSlider
+            v-model="progressValue"
+            :min="0"
+            :max="progressMax"
+            :step="1"
+            :show-tooltip="false"
+          />
+
+          <div class="timeline-time">{{ currentPoint?.time || '-' }}</div>
+        </div>
       </div>
     </div>
 
@@ -45,15 +81,37 @@
   import { Icon } from '@iconify/vue'
   import mapboxgl from 'mapbox-gl'
   import 'mapbox-gl/dist/mapbox-gl.css'
+  import { fetchShipGatewayStatus, fetchShipTrackHistory } from '@/api/drone'
+  import { ElMessage } from 'element-plus'
+
+  const MAPBOX_TOKEN =
+    import.meta.env.VITE_MAPBOX_TOKEN ||
+    import.meta.env.VITE_MAPBOX_ACCESS_TOKEN ||
+    ''
 
   interface Props {
     visible: boolean
     deviceData?: any
   }
 
-  interface TrackHistoryItem {
+  interface TrackPoint {
+    date: string
     time: string
-    coordinates: [number, number][]
+    timestamp: number
+    coordinate: [number, number]
+    speed?: number | null
+    direction?: number | null
+  }
+
+  interface DailyTrack {
+    date: string
+    points: TrackPoint[]
+  }
+
+  interface TimelineMark {
+    index: number
+    left: number
+    label: string
   }
 
   const props = defineProps<Props>()
@@ -64,107 +122,109 @@
     set: (val) => emit('update:visible', val)
   })
 
-  // Mapbox access token - 请替换为你自己的token
-  const MAPBOX_TOKEN = 'pk.eyJ1IjoiaGFua3NnYW8yMjExIiwiYSI6ImNtZzQzN3Q4cTFob3IycnEydGc1a2hmMmYifQ.Iys4mJ4-5OHRNeyFmWCOfw'
-
-  // 地图实例
   let map: mapboxgl.Map | null = null
-  let trackLine: mapboxgl.Marker[] = []
+  let markers: mapboxgl.Marker[] = []
+  let pollingTimer: number | null = null
+  let playbackTimer: number | null = null
+  let fittedDate = ''
 
-  // 选中的轨迹索引
   const selectedTrackIndex = ref(0)
+  const progressValue = ref(0)
+  const isPlaying = ref(false)
+  const dailyTracks = ref<DailyTrack[]>([])
 
-  // 模拟轨迹历史数据
-  const trackHistory = ref<TrackHistoryItem[]>([
-    {
-      time: '2024-08-02 15:00',
-      coordinates: [
-        [119.5, 26.0],
-        [119.52, 26.02],
-        [119.54, 26.04],
-        [119.56, 26.06],
-        [119.58, 26.08]
-      ]
-    },
-    {
-      time: '2024-08-04 12:00',
-      coordinates: [
-        [119.6, 26.1],
-        [119.62, 26.12],
-        [119.64, 26.14],
-        [119.66, 26.16]
-      ]
-    },
-    {
-      time: '2024-09-06 17:00',
-      coordinates: [
-        [119.7, 26.2],
-        [119.72, 26.22],
-        [119.74, 26.24],
-        [119.76, 26.26],
-        [119.78, 26.28]
-      ]
-    },
-    {
-      time: '2024-09-10 15:00',
-      coordinates: [
-        [119.8, 26.3],
-        [119.82, 26.32],
-        [119.84, 26.34]
+  const deviceModel = computed(() => props.deviceData?.model || '')
+  const currentDayTrack = computed(() => dailyTracks.value[selectedTrackIndex.value])
+  const progressMax = computed(() => Math.max((currentDayTrack.value?.points.length || 1) - 1, 0))
+  const currentPoint = computed(() => currentDayTrack.value?.points[progressValue.value])
+
+  const formatTickTime = (timestamp: number) => {
+    const date = new Date(timestamp)
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    const ss = String(date.getSeconds()).padStart(2, '0')
+    return `${hh}:${mm}:${ss}`
+  }
+
+  const timelineMarks = computed<TimelineMark[]>(() => {
+    const points = currentDayTrack.value?.points || []
+    const total = points.length
+    if (!total) return []
+
+    if (total === 1) {
+      return [
+        {
+          index: 0,
+          left: 0,
+          label: formatTickTime(points[0].timestamp)
+        }
       ]
     }
-  ])
 
-  /**
-   * 初始化地图
-   */
+    const tickCount = Math.min(6, total)
+    const indices = new Set<number>()
+    for (let i = 0; i < tickCount; i += 1) {
+      indices.add(Math.round((i * (total - 1)) / (tickCount - 1)))
+    }
+
+    return Array.from(indices)
+      .sort((a, b) => a - b)
+      .map((idx) => ({
+        index: idx,
+        left: (idx / (total - 1)) * 100,
+        label: formatTickTime(points[idx].timestamp)
+      }))
+  })
+
+  const formatDateKey = (date: Date) => {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  const clearTrackMarkers = () => {
+    markers.forEach((marker) => marker.remove())
+    markers = []
+  }
+
   const initMap = () => {
     try {
+      if (!MAPBOX_TOKEN) {
+        ElMessage.error('未配置 Mapbox Token，请在 .env 中设置 VITE_MAPBOX_TOKEN')
+        return
+      }
+
       mapboxgl.accessToken = MAPBOX_TOKEN
 
       map = new mapboxgl.Map({
         container: 'track-map',
-        style: 'mapbox://styles/mapbox/streets-v12', // 可以改为 satellite-v9 卫星图
-        center: [119.3, 26.08], // 福清市附近坐标
+        style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+        center: [114.3, 30.5],
         zoom: 10
       })
 
-      // 添加导航控件
       map.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
-      // 地图加载完成后绘制轨迹
-      map.on('load', () => {
-        drawTrack(selectedTrackIndex.value)
+      map.on('load', async () => {
+        await loadPersistedTracks()
+        await pollTrack()
+        startPolling()
       })
     } catch (error) {
       console.error('地图初始化失败:', error)
-      // 如果Mapbox token无效，显示提示信息
-      const mapElement = document.getElementById('track-map')
-      if (mapElement) {
-        mapElement.innerHTML = `
-          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: #f5f5f5; color: #666;">
-            <p style="font-size: 16px; margin-bottom: 10px;">地图加载失败</p>
-            <p style="font-size: 14px;">请配置有效的 Mapbox Access Token</p>
-            <p style="font-size: 12px; margin-top: 10px; color: #999;">获取地址: https://account.mapbox.com/access-tokens/</p>
-          </div>
-        `
-      }
+      ElMessage.error('轨迹地图加载失败')
     }
   }
 
-  /**
-   * 绘制轨迹
-   */
-  const drawTrack = (index: number) => {
+  const drawTrack = () => {
     if (!map) return
 
-    const track = trackHistory.value[index]
-    if (!track) return
+    const dayTrack = currentDayTrack.value
+    if (!dayTrack || dayTrack.points.length === 0) return
 
-    // 清除之前的轨迹
-    clearTrack()
+    const points = dayTrack.points.map((item) => item.coordinate)
 
-    // 添加轨迹线
     if (map.getSource('route')) {
       map.removeLayer('route')
       map.removeSource('route')
@@ -177,7 +237,7 @@
         properties: {},
         geometry: {
           type: 'LineString',
-          coordinates: track.coordinates
+          coordinates: points
         }
       }
     })
@@ -196,70 +256,217 @@
       }
     })
 
-    // 添加起点和终点标记
+    clearTrackMarkers()
+
     const startMarker = new mapboxgl.Marker({ color: '#52c41a' })
-      .setLngLat(track.coordinates[0])
+      .setLngLat(points[0])
       .setPopup(new mapboxgl.Popup().setHTML('<strong>起点</strong>'))
       .addTo(map)
 
     const endMarker = new mapboxgl.Marker({ color: '#f5222d' })
-      .setLngLat(track.coordinates[track.coordinates.length - 1])
+      .setLngLat(points[points.length - 1])
       .setPopup(new mapboxgl.Popup().setHTML('<strong>终点</strong>'))
       .addTo(map)
 
-    trackLine.push(startMarker, endMarker)
+    markers.push(startMarker, endMarker)
 
-    // 调整地图视图以适应轨迹
-    const bounds = new mapboxgl.LngLatBounds()
-    track.coordinates.forEach((coord) => bounds.extend(coord as [number, number]))
-    map.fitBounds(bounds, { padding: 50 })
+    const selected = dayTrack.points[progressValue.value]
+    if (selected) {
+      const selectedMarker = new mapboxgl.Marker({ color: '#1890ff' })
+        .setLngLat(selected.coordinate)
+        .setPopup(
+          new mapboxgl.Popup().setHTML(
+            `<strong>${selected.time}</strong><br/>速度: ${selected.speed ?? '-'} 节<br/>航向: ${selected.direction ?? '-'}°`
+          )
+        )
+        .addTo(map)
+      markers.push(selectedMarker)
+    }
+
+    if (fittedDate !== dayTrack.date && points.length > 1) {
+      const bounds = points.reduce(
+        (b, p) => b.extend(p),
+        new mapboxgl.LngLatBounds(points[0], points[0])
+      )
+      map.fitBounds(bounds, { padding: 50 })
+      fittedDate = dayTrack.date
+    }
   }
 
-  /**
-   * 清除轨迹
-   */
-  const clearTrack = () => {
-    trackLine.forEach((marker) => marker.remove())
-    trackLine = []
-  }
-
-  /**
-   * 选择轨迹
-   */
   const selectTrack = (index: number) => {
     selectedTrackIndex.value = index
-    drawTrack(index)
+    progressValue.value = Math.max((dailyTracks.value[index]?.points.length || 1) - 1, 0)
+    drawTrack()
   }
 
-  /**
-   * 关闭对话框
-   */
+  const startPolling = () => {
+    if (pollingTimer) clearInterval(pollingTimer)
+    pollingTimer = window.setInterval(() => {
+      pollTrack()
+    }, 3000)
+  }
+
+  const stopPolling = () => {
+    if (pollingTimer) {
+      clearInterval(pollingTimer)
+      pollingTimer = null
+    }
+  }
+
+  const stopPlayback = () => {
+    if (playbackTimer) {
+      clearInterval(playbackTimer)
+      playbackTimer = null
+    }
+    isPlaying.value = false
+  }
+
+  const togglePlayback = () => {
+    const track = currentDayTrack.value
+    if (!track || track.points.length <= 1) return
+
+    if (isPlaying.value) {
+      stopPlayback()
+      return
+    }
+
+    isPlaying.value = true
+    playbackTimer = window.setInterval(() => {
+      if (progressValue.value >= progressMax.value) {
+        stopPlayback()
+        return
+      }
+      progressValue.value += 1
+    }, 700)
+  }
+
+  const resetPlayback = () => {
+    stopPlayback()
+    progressValue.value = 0
+    drawTrack()
+  }
+
+  const pollTrack = async () => {
+    const status = await fetchShipGatewayStatus()
+    const packets = status?.last_boat_packets || {}
+    const packet = Object.values(packets).find((item) => {
+      if (deviceModel.value) {
+        return (item.ship_model || '').toLowerCase() === String(deviceModel.value).toLowerCase()
+      }
+      return true
+    })
+
+    if (!packet || packet.longitude == null || packet.latitude == null) return
+
+    const now = new Date()
+    const dateKey = formatDateKey(now)
+    const nextPoint: [number, number] = [packet.longitude, packet.latitude]
+
+    let dayIndex = dailyTracks.value.findIndex((item) => item.date === dateKey)
+    if (dayIndex < 0) {
+      dailyTracks.value.push({ date: dateKey, points: [] })
+      dayIndex = dailyTracks.value.length - 1
+    }
+
+    const dayPoints = dailyTracks.value[dayIndex].points
+    const last = dayPoints[dayPoints.length - 1]
+    const isSame = last && last.coordinate[0] === nextPoint[0] && last.coordinate[1] === nextPoint[1]
+    if (isSame) return
+
+    dayPoints.push({
+      date: dateKey,
+      time: now.toLocaleString(),
+      timestamp: now.getTime(),
+      coordinate: nextPoint,
+      speed: packet.speed,
+      direction: packet.direction
+    })
+
+    if (dayPoints.length > 2000) {
+      dayPoints.shift()
+    }
+
+    selectedTrackIndex.value = dayIndex
+    progressValue.value = Math.max(dayPoints.length - 1, 0)
+    drawTrack()
+  }
+
+  const loadPersistedTracks = async () => {
+    const records = await fetchShipTrackHistory({
+      shipModel: deviceModel.value || undefined,
+      days: 7
+    })
+
+    if (!records || records.length === 0) return
+
+    const grouped = new Map<string, TrackPoint[]>()
+    for (const item of records) {
+      const ts = new Date(item.recordedAt.replace(' ', 'T')).getTime()
+      if (!Number.isFinite(ts)) continue
+
+      const dateKey = formatDateKey(new Date(ts))
+      const points = grouped.get(dateKey) || []
+      points.push({
+        date: dateKey,
+        time: item.recordedAt,
+        timestamp: ts,
+        coordinate: [item.longitude, item.latitude],
+        speed: item.speed,
+        direction: item.direction
+      })
+      grouped.set(dateKey, points)
+    }
+
+    dailyTracks.value = Array.from(grouped.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, points]) => ({
+        date,
+        points: points.sort((p1, p2) => p1.timestamp - p2.timestamp)
+      }))
+
+    if (dailyTracks.value.length > 0) {
+      selectedTrackIndex.value = dailyTracks.value.length - 1
+      progressValue.value = Math.max((currentDayTrack.value?.points.length || 1) - 1, 0)
+      drawTrack()
+    }
+  }
+
   const handleClose = () => {
     dialogVisible.value = false
   }
 
-  /**
-   * 监听对话框打开
-   */
   watch(dialogVisible, (val) => {
     if (val) {
+      dailyTracks.value = []
+      selectedTrackIndex.value = 0
+      progressValue.value = 0
+      fittedDate = ''
+      stopPlayback()
       nextTick(() => {
         initMap()
       })
     } else {
-      // 清理地图实例
+      stopPlayback()
+      stopPolling()
       if (map) {
         map.remove()
         map = null
       }
-      trackLine = []
+      markers = []
     }
   })
 
-  /**
-   * 组件卸载时清理
-   */
+  watch(progressValue, () => {
+    drawTrack()
+  })
+
+  watch(selectedTrackIndex, () => {
+    stopPlayback()
+  })
+
   onUnmounted(() => {
+    stopPlayback()
+    stopPolling()
     if (map) {
       map.remove()
       map = null
@@ -275,7 +482,7 @@
   }
 
   .time-list-section {
-    width: 200px;
+    width: 220px;
     display: flex;
     flex-direction: column;
     border-right: 1px solid #e8e8e8;
@@ -334,6 +541,12 @@
     .time-text {
       font-size: 14px;
       color: #333;
+      flex: 1;
+    }
+
+    .time-count {
+      font-size: 12px;
+      color: #999;
     }
   }
 
@@ -345,9 +558,75 @@
 
   .track-map {
     width: 100%;
-    height: 100%;
+    height: calc(100% - 86px);
     border-radius: 4px;
     overflow: hidden;
+  }
+
+  .timeline-panel {
+    padding: 10px 12px 2px;
+    border-top: 1px solid #e8e8e8;
+
+    .timeline-meta {
+      display: flex;
+      justify-content: space-between;
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .timeline-controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .timeline-ruler {
+      position: relative;
+      height: 28px;
+      margin-bottom: 2px;
+
+      .timeline-ruler-item {
+        position: absolute;
+        top: 0;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        color: #909399;
+        font-size: 11px;
+        line-height: 1;
+
+        &.first {
+          transform: translateX(0);
+          align-items: flex-start;
+        }
+
+        &.last {
+          transform: translateX(-100%);
+          align-items: flex-end;
+        }
+
+        .tick {
+          width: 1px;
+          height: 7px;
+          background: #c0c4cc;
+          margin-bottom: 3px;
+        }
+
+        .label {
+          white-space: nowrap;
+          letter-spacing: 0;
+        }
+      }
+    }
+
+    .timeline-time {
+      color: #333;
+      font-size: 13px;
+      margin-top: 4px;
+      line-height: 1;
+    }
   }
 
   .dialog-footer {
@@ -355,14 +634,12 @@
     justify-content: flex-end;
   }
 
-  // 调整对话框样式
   :deep(.track-dialog) {
     .el-dialog__body {
       padding: 20px;
     }
   }
 
-  // 自定义滚动条
   .time-list::-webkit-scrollbar {
     width: 6px;
   }

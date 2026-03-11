@@ -3,10 +3,11 @@ import os
 import socket
 import struct
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
-from .models import NutrientData, WaterQualityData
+from .models import BoatTrackRecord, NutrientData, WaterQualityData
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,16 @@ def parse_boat_payload(input_text: str) -> dict:
     return data
 
 
+def _parse_boat_device_time(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.strptime(value, '%Y%m%d%H%M%S')
+        return dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
 def parse_depth_payload(input_text: str) -> dict:
     """Parse type-D depth payload.
 
@@ -273,12 +284,14 @@ class ShipGatewayService:
         self.host = host
         self.port_start = port_start
         self.ship_count = ship_count
+        self.online_grace_seconds = max(0.0, float(os.getenv('SHIP_ONLINE_GRACE_SECONDS', '8')))
         self.ship_port_model_map = load_ship_port_model_map()
         self.reported_ship_model_by_port: Dict[int, str] = {}
         self.last_boat_packet_by_port: Dict[int, dict] = {}
         self.last_depth_packet_by_port: Dict[int, dict] = {}
         self.last_rtk_packet_by_port: Dict[int, dict] = {}
         self.clients: Dict[int, socket.socket] = {}
+        self.last_seen_by_port: Dict[int, float] = {}
         self._servers: List[socket.socket] = []
         self._threads: List[threading.Thread] = []
         self._lock = threading.Lock()
@@ -304,6 +317,7 @@ class ShipGatewayService:
                 except Exception:
                     pass
             self.clients.clear()
+            self.last_seen_by_port.clear()
             self.reported_ship_model_by_port.clear()
             self.last_boat_packet_by_port.clear()
             self.last_depth_packet_by_port.clear()
@@ -318,7 +332,31 @@ class ShipGatewayService:
 
     def status(self) -> dict:
         with self._lock:
-            online_ports = sorted(self.clients.keys())
+            now = time.time()
+            connected_ports = set(self.clients.keys())
+
+            # Smooth short network blips: keep port online for a grace window
+            # after the last received packet/heartbeat.
+            recent_ports = {
+                port
+                for port, ts in self.last_seen_by_port.items()
+                if now - ts <= self.online_grace_seconds
+            }
+            online_ports = sorted(connected_ports | recent_ports)
+
+            # Cleanup stale cached state when a port has been offline beyond grace window.
+            stale_ports = {
+                port
+                for port, ts in self.last_seen_by_port.items()
+                if port not in connected_ports and now - ts > self.online_grace_seconds
+            }
+            for port in stale_ports:
+                self.last_seen_by_port.pop(port, None)
+                self.reported_ship_model_by_port.pop(port, None)
+                self.last_boat_packet_by_port.pop(port, None)
+                self.last_depth_packet_by_port.pop(port, None)
+                self.last_rtk_packet_by_port.pop(port, None)
+
             reported_models = {str(port): model for port, model in self.reported_ship_model_by_port.items()}
             last_boat_packets = {
                 str(port): payload for port, payload in self.last_boat_packet_by_port.items()
@@ -404,6 +442,7 @@ class ShipGatewayService:
 
                 with self._lock:
                     self.clients[port] = client
+                    self.last_seen_by_port[port] = time.time()
 
                 if data.hex() == '00':
                     continue
@@ -423,10 +462,6 @@ class ShipGatewayService:
             with self._lock:
                 if self.clients.get(port) is client:
                     self.clients.pop(port, None)
-                self.reported_ship_model_by_port.pop(port, None)
-                self.last_boat_packet_by_port.pop(port, None)
-                self.last_depth_packet_by_port.pop(port, None)
-                self.last_rtk_packet_by_port.pop(port, None)
             try:
                 client.close()
             except Exception:
@@ -452,6 +487,23 @@ class ShipGatewayService:
             try:
                 boat_payload = parse_boat_payload(packet['payload_text'])
                 reported = boat_payload['ship_model']
+
+                latitude = boat_payload.get('latitude')
+                longitude = boat_payload.get('longitude')
+                if latitude is not None and longitude is not None:
+                    BoatTrackRecord.objects.create(
+                        ship_model=reported,
+                        ship_port=ship_port,
+                        boat_timestamp=boat_payload.get('boat_timestamp'),
+                        device_time=_parse_boat_device_time(boat_payload.get('boat_timestamp')),
+                        status=boat_payload.get('status'),
+                        latitude=latitude,
+                        longitude=longitude,
+                        speed=boat_payload.get('speed'),
+                        direction=boat_payload.get('direction'),
+                        battery_voltage=boat_payload.get('battery_voltage'),
+                    )
+
                 with self._lock:
                     self.reported_ship_model_by_port[ship_port] = reported
                     self.last_boat_packet_by_port[ship_port] = boat_payload

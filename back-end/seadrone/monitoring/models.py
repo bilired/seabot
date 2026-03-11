@@ -50,3 +50,31 @@ class NutrientData(models.Model):
     
     def __str__(self):
         return f"{self.ship_model} - {self.collection_time}"
+
+
+class BoatTrackRecord(models.Model):
+    """船体轨迹记录（用于地图轨迹回放）"""
+
+    ship_model = models.CharField(max_length=50, db_index=True, help_text='船型号')
+    ship_port = models.IntegerField(null=True, blank=True, db_index=True, help_text='来源端口')
+    boat_timestamp = models.CharField(max_length=20, null=True, blank=True, help_text='设备时间原始值')
+    device_time = models.DateTimeField(null=True, blank=True, db_index=True, help_text='设备时间')
+    status = models.CharField(max_length=50, null=True, blank=True, help_text='状态')
+    latitude = models.FloatField(help_text='纬度')
+    longitude = models.FloatField(help_text='经度')
+    speed = models.FloatField(null=True, blank=True, help_text='航速(节)')
+    direction = models.FloatField(null=True, blank=True, help_text='航向(度)')
+    battery_voltage = models.FloatField(null=True, blank=True, help_text='电压(V)')
+    recorded_at = models.DateTimeField(auto_now_add=True, db_index=True, help_text='入库时间')
+
+    class Meta:
+        verbose_name = '船体轨迹记录'
+        verbose_name_plural = '船体轨迹记录'
+        ordering = ['-recorded_at']
+        indexes = [
+            models.Index(fields=['ship_model', '-recorded_at']),
+            models.Index(fields=['ship_port', '-recorded_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.ship_model} ({self.latitude}, {self.longitude}) @ {self.recorded_at}"
