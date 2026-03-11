@@ -3,7 +3,7 @@
 批量上传本地图片到后端图像上传接口，用于验证后端接收与入库情况。
 
 默认目录: ~/Desktop/boat-image
-默认接口: http://127.0.0.1:8000/api
+默认接口: https://yunpingtai.cc/api
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Iterable
+from typing import Optional
 
 import requests
 
@@ -25,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="批量上传 boat-image 图片到后端")
     parser.add_argument(
         "--base-url",
-        default="http://127.0.0.1:8000/api",
+        default="https://yunpingtai.cc/api",
         help="后端 API 根地址，示例: http://127.0.0.1:8000/api"
     )
     parser.add_argument(
@@ -33,12 +34,18 @@ def parse_args() -> argparse.Namespace:
         default=str(Path.home() / "Desktop" / "boat-image"),
         help="图片目录，默认 ~/Desktop/boat-image"
     )
-    parser.add_argument("--username", required=True, help="登录用户名")
-    parser.add_argument("--password", required=True, help="登录密码")
+    parser.add_argument("--username", required=False, help="登录用户名（可选）")
+    parser.add_argument("--password", required=False, help="登录密码（可选）")
     parser.add_argument(
         "--ship-model",
         default="DL-3022",
         help="上传时附带的 shipModel，用于历史记录归档"
+    )
+    parser.add_argument(
+        "--ship-port",
+        type=int,
+        default=9001,
+        help="上传时附带的 shipPort，用于服务端按端口映射设备型号，默认 9001"
     )
     parser.add_argument(
         "--recursive",
@@ -112,9 +119,10 @@ def login(base_url: str, username: str, password: str, timeout: int, verify_ssl:
 
 def upload_one(
     base_url: str,
-    token: str,
+    token: Optional[str],
     image_path: Path,
     ship_model: str,
+    ship_port: int,
     timeout: int,
     verify_ssl: bool,
 ) -> tuple[bool, str]:
@@ -123,8 +131,8 @@ def upload_one(
 
     with image_path.open("rb") as f:
         files = {"file": (image_path.name, f, content_type)}
-        data = {"shipModel": ship_model}
-        headers = {"Authorization": f"Bearer {token}"}
+        data = {"shipModel": ship_model, "shipPort": str(ship_port)}
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
 
         try:
             resp = requests.post(
@@ -211,17 +219,25 @@ def main() -> int:
             print(f"[DRY] {p}")
         return 0
 
-    try:
-        token = login(
-            base_url=args.base_url,
-            username=args.username,
-            password=args.password,
-            timeout=args.timeout,
-            verify_ssl=args.verify_ssl,
-        )
-    except RuntimeError as exc:
-        print(f"[ERROR] {exc}")
-        return 1
+    token: Optional[str] = None
+    if args.username or args.password:
+        if not args.username or not args.password:
+            print("[ERROR] --username 和 --password 需同时提供，或都不提供（匿名上传）")
+            return 1
+
+        try:
+            token = login(
+                base_url=args.base_url,
+                username=args.username,
+                password=args.password,
+                timeout=args.timeout,
+                verify_ssl=args.verify_ssl,
+            )
+        except RuntimeError as exc:
+            print(f"[ERROR] {exc}")
+            return 1
+    else:
+        print("[INFO] 未提供账号密码，将按匿名模式上传")
 
     ok_count = 0
     fail_count = 0
@@ -232,6 +248,7 @@ def main() -> int:
             token=token,
             image_path=image_path,
             ship_model=args.ship_model,
+            ship_port=args.ship_port,
             timeout=args.timeout,
             verify_ssl=args.verify_ssl,
         )
@@ -248,6 +265,9 @@ def main() -> int:
     print(f"总计: {len(image_files)}")
 
     if args.check_history:
+        if not token:
+            print("[WARN] 匿名模式无法拉取历史列表（该接口需要认证），跳过")
+            return 0 if fail_count == 0 else 2
         check_history(
             base_url=args.base_url,
             token=token,

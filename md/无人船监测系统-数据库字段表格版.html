@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>无人船监测系统-数据库字段表格版</title>
+  <style>
+    body { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; line-height: 1.6; color: #222; margin: 28px; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    h2 { font-size: 18px; margin-top: 24px; margin-bottom: 8px; }
+    p { margin: 4px 0 10px; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; font-size: 13px; }
+    th, td { border: 1px solid #333; padding: 6px 8px; vertical-align: top; }
+    th { background: #f2f2f2; text-align: left; }
+    .note { color: #666; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>无人船监测系统数据库字段汇总（论文表格版）</h1>
+  <p class="note">表头统一为：字段名 / 数据类型 / 约束条件 / 字段说明</p>
+
+  <h2>1. UserProfile（用户扩展信息表）</h2>
+  <table>
+    <tr><th>字段名</th><th>数据类型</th><th>约束条件</th><th>字段说明</th></tr>
+    <tr><td>id</td><td>bigint</td><td>PK, 自增</td><td>主键</td></tr>
+    <tr><td>user_id</td><td>bigint</td><td>FK->auth_user.id, OneToOne, NOT NULL</td><td>关联用户</td></tr>
+    <tr><td>avatar</td><td>varchar(500)</td><td>NULL, DEFAULT ''</td><td>头像 URL</td></tr>
+    <tr><td>mobile</td><td>varchar(20)</td><td>NULL, DEFAULT ''</td><td>手机号</td></tr>
+    <tr><td>real_name</td><td>varchar(50)</td><td>NULL, DEFAULT ''</td><td>真实姓名</td></tr>
+    <tr><td>nick_name</td><td>varchar(50)</td><td>NULL, DEFAULT ''</td><td>昵称</td></tr>
+    <tr><td>gender</td><td>varchar(2)</td><td>NULL, DEFAULT ''</td><td>性别编码（1男/2女）</td></tr>
+    <tr><td>address</td><td>varchar(255)</td><td>NULL, DEFAULT ''</td><td>地址</td></tr>
+    <tr><td>description</td><td>text</td><td>NULL, DEFAULT ''</td><td>个人介绍</td></tr>
+  </table>
+
+  <h2>2. DroneDevice（无人船设备表）</h2>
+  <table>
+    <tr><th>字段名</th><th>数据类型</th><th>约束条件</th><th>字段说明</th></tr>
+    <tr><td>id</td><td>bigint</td><td>PK, 自增</td><td>主键</td></tr>
+    <tr><td>owner_id</td><td>bigint</td><td>FK->auth_user.id, NULL</td><td>设备所属用户</td></tr>
+    <tr><td>ship_type</td><td>varchar(50)</td><td>NOT NULL</td><td>船型</td></tr>
+    <tr><td>length</td><td>int</td><td>NOT NULL</td><td>长度(cm)</td></tr>
+    <tr><td>model</td><td>varchar(50)</td><td>NOT NULL</td><td>型号</td></tr>
+    <tr><td>weight</td><td>float</td><td>NOT NULL</td><td>重量(kg)</td></tr>
+    <tr><td>functions</td><td>varchar(255)</td><td>NOT NULL</td><td>功能模块</td></tr>
+    <tr><td>image</td><td>varchar(500)</td><td>NULL, DEFAULT ''</td><td>设备图片 URL</td></tr>
+    <tr><td>stream_url</td><td>varchar(500)</td><td>NULL, DEFAULT ''</td><td>视频拉流地址</td></tr>
+    <tr><td>status</td><td>varchar(20)</td><td>NOT NULL, DEFAULT 'offline', choices(online/offline)</td><td>设备状态</td></tr>
+    <tr><td>max_speed</td><td>float</td><td>NOT NULL</td><td>最高航速(节)</td></tr>
+    <tr><td>created_at</td><td>datetime</td><td>NOT NULL, auto_now_add</td><td>创建时间</td></tr>
+    <tr><td>updated_at</td><td>datetime</td><td>NOT NULL, auto_now</td><td>更新时间</td></tr>
+  </table>
+
+  <h2>3. ImageTransferRecord（图片传输记录表）</h2>
+  <table>
+    <tr><th>字段名</th><th>数据类型</th><th>约束条件</th><th>字段说明</th></tr>
+    <tr><td>id</td><td>bigint</td><td>PK, 自增</td><td>主键</td></tr>
+    <tr><td>owner_id</td><td>bigint</td><td>FK->auth_user.id, NULL</td><td>记录归属用户</td></tr>
+    <tr><td>ship_model</td><td>varchar(50)</td><td>NOT NULL, DEFAULT '未知型号'</td><td>船型/设备型号</td></tr>
+    <tr><td>image_uid</td><td>varchar(64)</td><td>NOT NULL, UNIQUE</td><td>图片唯一标识</td></tr>
+    <tr><td>timestamp</td><td>datetime</td><td>NOT NULL</td><td>图片时间戳</td></tr>
+    <tr><td>image_format</td><td>varchar(16)</td><td>NOT NULL, DEFAULT 'jpg'</td><td>图片格式</td></tr>
+    <tr><td>resolution</td><td>varchar(32)</td><td>NULL, DEFAULT ''</td><td>分辨率（如1920x1080）</td></tr>
+    <tr><td>file_size_mb</td><td>float</td><td>NOT NULL, DEFAULT 0</td><td>文件大小(MB)</td></tr>
+    <tr><td>image_url</td><td>varchar(500)</td><td>NOT NULL</td><td>图片 URL</td></tr>
+    <tr><td>created_at</td><td>datetime</td><td>NOT NULL, auto_now_add</td><td>记录创建时间</td></tr>
+  </table>
+
+  <h2>4. WaterQualityData（水质监测数据表）</h2>
+  <table>
+    <tr><th>字段名</th><th>数据类型</th><th>约束条件</th><th>字段说明</th></tr>
+    <tr><td>id</td><td>bigint</td><td>PK, 自增</td><td>主键</td></tr>
+    <tr><td>ship_model</td><td>varchar(50)</td><td>NOT NULL</td><td>船型号</td></tr>
+    <tr><td>temperature</td><td>float</td><td>NOT NULL</td><td>水温(°C)</td></tr>
+    <tr><td>ph</td><td>float</td><td>NOT NULL</td><td>pH值</td></tr>
+    <tr><td>chlorophyll</td><td>float</td><td>NOT NULL</td><td>叶绿素(μg/L)</td></tr>
+    <tr><td>salinity</td><td>float</td><td>NOT NULL</td><td>盐度</td></tr>
+    <tr><td>dissolved_oxygen</td><td>float</td><td>NOT NULL</td><td>溶解氧(mg/L)</td></tr>
+    <tr><td>conductivity</td><td>float</td><td>NOT NULL</td><td>电导率(μS/cm)</td></tr>
+    <tr><td>turbidity</td><td>float</td><td>NOT NULL</td><td>浊度(NTU)</td></tr>
+    <tr><td>algae</td><td>int</td><td>NOT NULL</td><td>蓝绿藻(cells/mL)</td></tr>
+    <tr><td>warning_code</td><td>varchar(50)</td><td>NOT NULL, DEFAULT '正常'</td><td>警告码</td></tr>
+    <tr><td>collection_time</td><td>datetime</td><td>NOT NULL, auto_now_add</td><td>采集时间</td></tr>
+    <tr><td>connection_status</td><td>varchar(20)</td><td>NOT NULL, DEFAULT '在线'</td><td>连接状态</td></tr>
+  </table>
+
+  <h2>5. NutrientData（营养盐数据表）</h2>
+  <table>
+    <tr><th>字段名</th><th>数据类型</th><th>约束条件</th><th>字段说明</th></tr>
+    <tr><td>id</td><td>bigint</td><td>PK, 自增</td><td>主键</td></tr>
+    <tr><td>ship_model</td><td>varchar(50)</td><td>NOT NULL</td><td>船型号</td></tr>
+    <tr><td>phosphate</td><td>float</td><td>NOT NULL</td><td>磷酸盐(mg/L)</td></tr>
+    <tr><td>phosphate_time</td><td>datetime</td><td>NOT NULL</td><td>磷酸盐获取时间</td></tr>
+    <tr><td>ammonia</td><td>float</td><td>NOT NULL</td><td>氨氮</td></tr>
+    <tr><td>ammonia_time</td><td>datetime</td><td>NOT NULL</td><td>氨氮获取时间</td></tr>
+    <tr><td>nitrate</td><td>float</td><td>NOT NULL</td><td>硝酸盐</td></tr>
+    <tr><td>nitrate_time</td><td>datetime</td><td>NOT NULL</td><td>硝酸盐获取时间</td></tr>
+    <tr><td>nitrite</td><td>float</td><td>NOT NULL</td><td>亚硝酸盐</td></tr>
+    <tr><td>nitrite_time</td><td>datetime</td><td>NOT NULL</td><td>亚硝酸盐获取时间</td></tr>
+    <tr><td>error_code1</td><td>varchar(10)</td><td>NOT NULL, DEFAULT '00'</td><td>错误码1</td></tr>
+    <tr><td>error_code2</td><td>varchar(10)</td><td>NOT NULL, DEFAULT '00'</td><td>错误码2</td></tr>
+    <tr><td>instrument_status</td><td>varchar(20)</td><td>NOT NULL, DEFAULT '正常'</td><td>仪器状态</td></tr>
+    <tr><td>collection_time</td><td>datetime</td><td>NOT NULL, auto_now_add</td><td>采集时间</td></tr>
+    <tr><td>connection_status</td><td>varchar(20)</td><td>NOT NULL, DEFAULT '在线'</td><td>连接状态</td></tr>
+  </table>
+
+  <h2>6. BoatTrackRecord（船体轨迹记录表）</h2>
+  <table>
+    <tr><th>字段名</th><th>数据类型</th><th>约束条件</th><th>字段说明</th></tr>
+    <tr><td>id</td><td>bigint</td><td>PK, 自增</td><td>主键</td></tr>
+    <tr><td>ship_model</td><td>varchar(50)</td><td>NOT NULL, INDEX</td><td>船型号</td></tr>
+    <tr><td>ship_port</td><td>int</td><td>NULL, INDEX</td><td>来源端口</td></tr>
+    <tr><td>boat_timestamp</td><td>varchar(20)</td><td>NULL</td><td>设备时间原始值</td></tr>
+    <tr><td>device_time</td><td>datetime</td><td>NULL, INDEX</td><td>设备时间</td></tr>
+    <tr><td>status</td><td>varchar(50)</td><td>NULL</td><td>状态</td></tr>
+    <tr><td>latitude</td><td>float</td><td>NOT NULL</td><td>纬度</td></tr>
+    <tr><td>longitude</td><td>float</td><td>NOT NULL</td><td>经度</td></tr>
+    <tr><td>speed</td><td>float</td><td>NULL</td><td>航速(节)</td></tr>
+    <tr><td>direction</td><td>float</td><td>NULL</td><td>航向(度)</td></tr>
+    <tr><td>battery_voltage</td><td>float</td><td>NULL</td><td>电压(V)</td></tr>
+    <tr><td>recorded_at</td><td>datetime</td><td>NOT NULL, auto_now_add, INDEX</td><td>入库时间</td></tr>
+  </table>
+
+  <h2>7. UserActivity（用户活动日志表）</h2>
+  <table>
+    <tr><th>字段名</th><th>数据类型</th><th>约束条件</th><th>字段说明</th></tr>
+    <tr><td>id</td><td>bigint</td><td>PK, 自增</td><td>主键</td></tr>
+    <tr><td>user_id</td><td>bigint</td><td>FK->auth_user.id, NOT NULL</td><td>关联用户</td></tr>
+    <tr><td>activity_type</td><td>varchar(50)</td><td>NOT NULL, DEFAULT 'other', choices</td><td>活动类型</td></tr>
+    <tr><td>description</td><td>varchar(255)</td><td>NOT NULL</td><td>活动描述</td></tr>
+    <tr><td>created_at</td><td>datetime</td><td>NOT NULL, auto_now_add</td><td>创建时间</td></tr>
+  </table>
+
+  <h2>8. DashboardStats（仪表板统计表）</h2>
+  <table>
+    <tr><th>字段名</th><th>数据类型</th><th>约束条件</th><th>字段说明</th></tr>
+    <tr><td>id</td><td>bigint</td><td>PK, 自增</td><td>主键</td></tr>
+    <tr><td>user_id</td><td>bigint</td><td>FK->auth_user.id, OneToOne, NOT NULL</td><td>关联用户</td></tr>
+    <tr><td>total_tasks</td><td>int</td><td>NOT NULL, DEFAULT 0</td><td>总任务数</td></tr>
+    <tr><td>completed_tasks</td><td>int</td><td>NOT NULL, DEFAULT 0</td><td>完成任务数</td></tr>
+    <tr><td>active_projects</td><td>int</td><td>NOT NULL, DEFAULT 0</td><td>活跃项目数</td></tr>
+    <tr><td>total_sales</td><td>decimal(10,2)</td><td>NOT NULL, DEFAULT 0</td><td>总销售额</td></tr>
+    <tr><td>new_users_count</td><td>int</td><td>NOT NULL, DEFAULT 0</td><td>新增用户数</td></tr>
+    <tr><td>updated_at</td><td>datetime</td><td>NOT NULL, auto_now</td><td>更新时间</td></tr>
+  </table>
+
+  <h2>9. MonthlySalesData（月度销售表）</h2>
+  <table>
+    <tr><th>字段名</th><th>数据类型</th><th>约束条件</th><th>字段说明</th></tr>
+    <tr><td>id</td><td>bigint</td><td>PK, 自增</td><td>主键</td></tr>
+    <tr><td>month</td><td>varchar(10)</td><td>NOT NULL</td><td>月份（如1月）</td></tr>
+    <tr><td>sales</td><td>int</td><td>NOT NULL</td><td>销售金额</td></tr>
+  </table>
+
+  <h2>10. UserGrowthData（用户增长表）</h2>
+  <table>
+    <tr><th>字段名</th><th>数据类型</th><th>约束条件</th><th>字段说明</th></tr>
+    <tr><td>id</td><td>bigint</td><td>PK, 自增</td><td>主键</td></tr>
+    <tr><td>date</td><td>date</td><td>NOT NULL</td><td>日期</td></tr>
+    <tr><td>new_users</td><td>int</td><td>NOT NULL</td><td>新增用户数</td></tr>
+    <tr><td>active_users</td><td>int</td><td>NOT NULL</td><td>活跃用户数</td></tr>
+  </table>
+</body>
+</html>

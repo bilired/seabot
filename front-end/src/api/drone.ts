@@ -100,6 +100,29 @@ export interface ShipGatewayStatusData {
   }>
 }
 
+export interface ShipTrackHistoryParams {
+  shipModel?: string
+  shipPort?: number
+  days?: number
+  startDate?: string
+  endDate?: string
+}
+
+export interface ShipTrackHistoryItem {
+  id: number
+  shipModel: string
+  shipPort: number
+  boatTimestamp?: string | null
+  deviceTime?: string | null
+  status?: string | null
+  latitude: number
+  longitude: number
+  speed?: number | null
+  direction?: number | null
+  batteryVoltage?: number | null
+  recordedAt: string
+}
+
 export function fetchDroneList(params: { current: number; size: number; keyword?: string }) {
   return request.get<DroneListResponse>({
     url: '/api/drone/list/',
@@ -158,6 +181,13 @@ export function sendShipAction(data: ShipActionParams) {
 export function fetchShipGatewayStatus() {
   return request.get<ShipGatewayStatusData>({
     url: '/api/ship/gateway/status/'
+  })
+}
+
+export function fetchShipTrackHistory(params: ShipTrackHistoryParams) {
+  return request.get<ShipTrackHistoryItem[]>({
+    url: '/api/ship/track/history/',
+    params
   })
 }
 

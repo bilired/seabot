@@ -18,6 +18,12 @@ class MonitoringConfig(AppConfig):
             return
 
         argv = [arg.lower() for arg in sys.argv]
+        # Gunicorn commonly runs multiple workers; auto-starting gateway in each worker
+        # causes duplicate port binding (Errno 98). Keep it off unless explicitly enabled.
+        allow_gunicorn = os.getenv('SHIP_GATEWAY_ALLOW_GUNICORN_AUTOSTART', '0').lower() in {'1', 'true', 'yes'}
+        if 'gunicorn' in argv and not allow_gunicorn:
+            return
+
         skip_commands = {'makemigrations', 'migrate', 'collectstatic', 'shell', 'check', 'test'}
         if any(cmd in argv for cmd in skip_commands):
             return

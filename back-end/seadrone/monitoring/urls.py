@@ -14,5 +14,6 @@ urlpatterns = [
     # 连接服务网关 API
     path('ship/gateway/start/', views.ship_gateway_start, name='ship_gateway_start'),
     path('ship/gateway/status/', views.ship_gateway_status, name='ship_gateway_status'),
+    path('ship/track/history/', views.ship_track_history, name='ship_track_history'),
     path('ship/action/', views.ship_action, name='ship_action'),
 ]

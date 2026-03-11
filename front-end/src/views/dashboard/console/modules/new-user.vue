@@ -9,26 +9,39 @@
         <ElButton @click="resetView" type="default" size="small">重置视图</ElButton>
       </div>
     </div>
-    <div ref="mapContainer" class="mapbox-container" style="height: 90%";></div>
+    <div ref="mapContainer" class="mapbox-container" style="height: 90%"></div>
   </div>
 </template>
 
 <script setup lang="ts">
+  import { ElMessage } from 'element-plus'
   import mapboxgl from 'mapbox-gl'
+  import { fetchShipGatewayStatus } from '@/api/drone'
+
+  const MAPBOX_TOKEN =
+    import.meta.env.VITE_MAPBOX_TOKEN ||
+    import.meta.env.VITE_MAPBOX_ACCESS_TOKEN ||
+    ''
 
   const mapContainer = ref<HTMLElement>()
   let map: mapboxgl.Map | null = null
-
-  // 设置 Mapbox access token（需要替换为你的实际token）
-  mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || 'pk.eyJ1IjoiZXhhbXBsZSIsImEiOiJjbHZkMzZ0d3oifQ.fake'
+  const markers = new Map<string, mapboxgl.Marker>()
+  let pollingTimer: number | null = null
 
   onMounted(() => {
     if (mapContainer.value) {
       try {
+        if (!MAPBOX_TOKEN) {
+          ElMessage.error('未配置 Mapbox Token，请在 .env 中设置 VITE_MAPBOX_TOKEN')
+          return
+        }
+
+        mapboxgl.accessToken = MAPBOX_TOKEN
+
         map = new mapboxgl.Map({
           container: mapContainer.value,
-          style: 'mapbox://styles/mapbox/streets-v12',
-          center: [116.4074, 39.9042], // 北京坐标
+          style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+          center: [114.3, 30.5],
           zoom: 10,
           pitch: 0,
           bearing: 0
@@ -37,57 +50,96 @@
         // 添加导航控件
         map.addControl(new mapboxgl.NavigationControl(), 'top-right')
         
-        // 添加地理位置控件
-        map.addControl(new mapboxgl.GeolocateControl({
-          positionOptions: {
-            enableHighAccuracy: true
-          },
-          trackUserLocation: true
-        }), 'top-right')
-
         // 添加缩放级别显示
         map.addControl(new mapboxgl.ScaleControl(), 'bottom-left')
 
-        // 添加示例标记
-        addMarkers()
+        map.on('load', async () => {
+          await refreshBoatMarkers()
+          startPolling()
+        })
       } catch (error) {
         console.error('地图初始化失败:', error)
-        ElMessage.error('地图加载失败，请检查 Mapbox token')
+        ElMessage.error('地图加载失败')
       }
     }
   })
 
   onBeforeUnmount(() => {
+    if (pollingTimer) {
+      clearInterval(pollingTimer)
+      pollingTimer = null
+    }
+    markers.forEach((marker) => marker.remove())
+    markers.clear()
     if (map) {
       map.remove()
     }
   })
 
-  const addMarkers = () => {
+  const startPolling = () => {
+    if (pollingTimer) clearInterval(pollingTimer)
+    pollingTimer = window.setInterval(() => {
+      refreshBoatMarkers()
+    }, 3000)
+  }
+
+  const refreshBoatMarkers = async () => {
     if (!map) return
 
-    const locations = [
-      { lng: 116.4074, lat: 39.9042, name: '北京' },
-      { lng: 121.4737, lat: 31.2304, name: '上海' },
-      { lng: 114.0579, lat: 22.5431, name: '深圳' }
-    ]
+    const status = await fetchShipGatewayStatus()
+    const packets = status?.last_boat_packets || {}
+    const activePorts = new Set<string>()
+    const points: [number, number][] = []
 
-    locations.forEach(location => {
-      const el = document.createElement('div')
-      el.className = 'marker'
-      el.style.backgroundImage = 'url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBkPSJNMTIgMkM2LjQ4IDIgMiA2LjQ4IDIgMTJjMCA1LjQ2IDUuNDUgMTAgMTAgMTAgNC4zNzcgMCA4LjAxLTMuMDk1IDguNjk2LTcuMDEzQzIyLjE3NiAxNi40NDQgMjIgMTYuNjYgMjIgMTYuODc0YzAtMS4xMDMtMC44OTctMi0yLTJoLS4wMWMtMS4xMjEgMC0yLjAzMyAwLjg5LTIuMDQgMi4wMDhDMTcuNzE3IDE3LjUxNiAxNS41MTYgMTkgMTMgMTljLTIuNzYgMC01LTIuMjQtNS01czIuMjQtNSA1LTVjMS43NzMgMCAzLjI5Ljg4IDQuMjgyIDIuMDAxTDEzIDExaDVWNi41YzAtMC4yNzcuMjIzLS41LjUtLjVoMS41YzEuOTMgMCAzLjUgMS41NyAzLjUgMy41djEuMTU0YzAtMi4wMDIgMS41NzctMy42NTQgMy41LTMuNjU0YzEuMTk3IDAgMi4yNDguNTMyIDIuOTYxIDEuMzY5QzIzLjIgOC41MjQgMjMuNjEgOC4yODkgMjMuNjEgNy43NTZDMjMuNjEgNy4zNDcgMjMuNDM0IDcuMDEyIDIzLjEzNCA2LjgyQzIzLjUyNCA1LjE1MSAyMS43NzQgMiAxMiAyek0xMiAxMHEtMS42NjUgMC0yLjgzNyAxLjE3MlQxNiAxMnExLjY2NSAwIDIuODM3LTEuMTcyVDEyIDEweiIgZmlsbD0iI0ZGMDAwMCIvPjwvc3ZnPg==)'
-      el.style.backgroundSize = '100%'
-      el.style.width = '32px'
-      el.style.height = '32px'
-      el.style.cursor = 'pointer'
+    Object.entries(packets).forEach(([port, packet]) => {
+      const lng = packet.longitude
+      const lat = packet.latitude
+      if (lng == null || lat == null) return
 
-      const popup = new mapboxgl.Popup({ offset: 25 }).setText(location.name)
+      activePorts.add(port)
+      points.push([lng, lat])
 
-      new mapboxgl.Marker(el)
-        .setLngLat([location.lng, location.lat])
-        .setPopup(popup)
-        .addTo(map!)
+      const popupHtml = `
+        <div>
+          <div><strong>${packet.ship_model || `船体-${port}`}</strong></div>
+          <div>端口: ${port}</div>
+          <div>经纬度: ${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
+          <div>速度: ${packet.speed ?? '-'} 节</div>
+          <div>航向: ${packet.direction ?? '-'}°</div>
+        </div>
+      `
+
+      if (markers.has(port)) {
+        markers.get(port)!.setLngLat([lng, lat]).setPopup(new mapboxgl.Popup({ offset: 20 }).setHTML(popupHtml))
+      } else {
+        const el = document.createElement('div')
+        el.className = 'ship-marker'
+        el.textContent = '⛵'
+        el.style.transform = `rotate(${packet.direction || 0}deg)`
+
+        const marker = new mapboxgl.Marker({ element: el })
+          .setLngLat([lng, lat])
+          .setPopup(new mapboxgl.Popup({ offset: 20 }).setHTML(popupHtml))
+          .addTo(map!)
+
+        markers.set(port, marker)
+      }
     })
+
+    Array.from(markers.keys()).forEach((port) => {
+      if (!activePorts.has(port)) {
+        markers.get(port)?.remove()
+        markers.delete(port)
+      }
+    })
+
+    if (points.length > 0) {
+      const bounds = points.reduce(
+        (b, p) => b.extend(p),
+        new mapboxgl.LngLatBounds(points[0], points[0])
+      )
+      map.fitBounds(bounds, { padding: 40, maxZoom: 14, duration: 800 })
+    }
   }
 
   const toggleFullscreen = () => {
@@ -104,7 +156,7 @@
     if (!map) return
 
     map.flyTo({
-      center: [116.4074, 39.9042],
+      center: [114.3, 30.5],
       zoom: 10,
       duration: 1500
     })
@@ -117,6 +169,19 @@
     height: 100%;
     border-radius: 4px;
     overflow: hidden;
+  }
+
+  .ship-marker {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(24, 144, 255, 0.18);
+    border: 2px solid #1890ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
   }
 
   :deep(.mapboxgl-popup-content) {
