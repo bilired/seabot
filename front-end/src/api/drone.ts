@@ -100,6 +100,7 @@ export interface ShipGatewayStatusData {
   }>
 }
 
+<<<<<<< HEAD
 export interface ShipTrackHistoryParams {
   shipModel?: string
   shipPort?: number
@@ -112,6 +113,12 @@ export interface ShipTrackHistoryItem {
   id: number
   shipModel: string
   shipPort: number
+=======
+export interface ShipTrackHistoryItem {
+  id: number
+  shipModel: string
+  shipPort?: number | null
+>>>>>>> 188b90e454c43b86d79b41a77e36bed61fc9221c
   boatTimestamp?: string | null
   deviceTime?: string | null
   status?: string | null
@@ -123,6 +130,17 @@ export interface ShipTrackHistoryItem {
   recordedAt: string
 }
 
+<<<<<<< HEAD
+=======
+export interface ShipTrackHistoryParams {
+  shipModel?: string
+  shipPort?: number
+  days?: number
+  startDate?: string
+  endDate?: string
+}
+
+>>>>>>> 188b90e454c43b86d79b41a77e36bed61fc9221c
 export function fetchDroneList(params: { current: number; size: number; keyword?: string }) {
   return request.get<DroneListResponse>({
     url: '/api/drone/list/',

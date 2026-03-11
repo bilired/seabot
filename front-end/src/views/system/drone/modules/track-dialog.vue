@@ -183,6 +183,7 @@
     return `${y}-${m}-${d}`
   }
 
+<<<<<<< HEAD
   const parseDateTime = (value?: string | null) => {
     if (!value) return null
     const normalized = value.includes('T') ? value : value.replace(' ', 'T')
@@ -234,6 +235,8 @@
     }
   }
 
+=======
+>>>>>>> 188b90e454c43b86d79b41a77e36bed61fc9221c
   const clearTrackMarkers = () => {
     markers.forEach((marker) => marker.remove())
     markers = []
@@ -258,6 +261,7 @@
       map.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
       map.on('load', async () => {
+<<<<<<< HEAD
         try {
           await loadTrackHistory()
           drawTrack()
@@ -266,6 +270,9 @@
           ElMessage.warning('加载历史轨迹失败，已切换实时轨迹')
         }
 
+=======
+        await loadPersistedTracks()
+>>>>>>> 188b90e454c43b86d79b41a77e36bed61fc9221c
         await pollTrack()
         startPolling()
       })
@@ -447,6 +454,49 @@
     selectedTrackIndex.value = dayIndex
     progressValue.value = Math.max(dayPoints.length - 1, 0)
     drawTrack()
+<<<<<<< HEAD
+=======
+  }
+
+  const loadPersistedTracks = async () => {
+    const records = await fetchShipTrackHistory({
+      shipModel: deviceModel.value || undefined,
+      days: 7
+    })
+
+    if (!records || records.length === 0) return
+
+    const grouped = new Map<string, TrackPoint[]>()
+    for (const item of records) {
+      const ts = new Date(item.recordedAt.replace(' ', 'T')).getTime()
+      if (!Number.isFinite(ts)) continue
+
+      const dateKey = formatDateKey(new Date(ts))
+      const points = grouped.get(dateKey) || []
+      points.push({
+        date: dateKey,
+        time: item.recordedAt,
+        timestamp: ts,
+        coordinate: [item.longitude, item.latitude],
+        speed: item.speed,
+        direction: item.direction
+      })
+      grouped.set(dateKey, points)
+    }
+
+    dailyTracks.value = Array.from(grouped.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, points]) => ({
+        date,
+        points: points.sort((p1, p2) => p1.timestamp - p2.timestamp)
+      }))
+
+    if (dailyTracks.value.length > 0) {
+      selectedTrackIndex.value = dailyTracks.value.length - 1
+      progressValue.value = Math.max((currentDayTrack.value?.points.length || 1) - 1, 0)
+      drawTrack()
+    }
+>>>>>>> 188b90e454c43b86d79b41a77e36bed61fc9221c
   }
 
   const handleClose = () => {
