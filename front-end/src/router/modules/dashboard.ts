@@ -24,3 +24,15 @@ export const analysisRoute: AppRouteRecord = {
     roles: ['R_SUPER', 'R_ADMIN']
   }
 }
+
+export const videoStreamMonitorRoute: AppRouteRecord = {
+  name: 'VideoStreamMonitor',
+  path: '/video-stream-monitor',
+  component: '/dashboard/video-stream-monitor',
+  meta: {
+    title: 'menus.dashboard.videoStreamMonitor',
+    icon: 'ri:video-on-line',
+    keepAlive: false,
+    roles: ['R_SUPER', 'R_ADMIN']
+  }
+}

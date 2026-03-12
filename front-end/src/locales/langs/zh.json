@@ -235,6 +235,7 @@
       "title": "仪表盘",
       "console": "工作台",
       "analysis": "数据监测",
+      "videoStreamMonitor": "视频流监测",
       "ecommerce": "电子商务"
     },
     "widgets": {

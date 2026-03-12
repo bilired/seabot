@@ -44,7 +44,7 @@ use([LineChart, TitleComponent, TooltipComponent, GridComponent, LegendComponent
 
 type WaterDataKey =
   | 'temp'
-  | 'ph'
+  | 'pH'
   | 'chlorophyll'
   | 'salinity'
   | 'oxygen'
@@ -53,37 +53,40 @@ type WaterDataKey =
   | 'cyanobacteria'
 
 type NutrientDataKey =
-  | 'phosphate'
-  | 'ammonia'
+  | 'phosphates'
+  | 'ammonia_nitrogen'
   | 'nitrate'
-  | 'nitrite'
+  | 'sub_nitrate'
 
 type DataKey = WaterDataKey | NutrientDataKey
 
 interface WaterQualityDataItem {
-  shipModel: string
+  ship_model: string
+  timestamp: string
+  warn: string
   temperature: number
-  ph: number
+  pH: number
   chlorophyll: number
   salinity: number
-  dissolvedOxygen: number
+  dissolved_oxygen: number
   conductivity: number
   turbidity: number
-  algae: number
-  collectionTime: string
+  'blue-green': number
 }
 
 interface NutrientDataItem {
-  shipModel: string
-  phosphate: number
-  phosphateTime: string
-  ammonia: number
-  ammoniaTime: string
+  data_id: string
+  timestamp: string | null
+  status: number
+  ammonia_nitrogen: number
+  ammonia_nitrogen_timestamp: string
   nitrate: number
-  nitrateTime: string
-  nitrite: number
-  nitriteTime: string
-  collectionTime: string
+  nitrate_timestamp: string
+  sub_nitrate: number
+  sub_nitrate_timestamp: string
+  phosphates: number
+  phosphates_timestamp: string
+  warn: string
 }
 
 const props = withDefaults(
@@ -99,7 +102,7 @@ const props = withDefaults(
 
 const waterChartOptions: { key: WaterDataKey; label: string }[] = [
   { key: 'temp', label: '水温（°C）' },
-  { key: 'ph', label: 'PH值' },
+  { key: 'pH', label: 'pH值' },
   { key: 'chlorophyll', label: '叶绿素浓度（μg/L）' },
   { key: 'salinity', label: '盐度' },
   { key: 'oxygen', label: '溶解氧（mg/L）' },
@@ -109,10 +112,10 @@ const waterChartOptions: { key: WaterDataKey; label: string }[] = [
 ]
 
 const nutrientChartOptions: { key: NutrientDataKey; label: string }[] = [
-  { key: 'phosphate', label: '磷酸盐（mg/L）' },
-  { key: 'ammonia', label: '氨氮（mg/L）' },
+  { key: 'phosphates', label: '磷酸盐（mg/L）' },
+  { key: 'ammonia_nitrogen', label: '氨氮（mg/L）' },
   { key: 'nitrate', label: '硝酸盐（mg/L）' },
-  { key: 'nitrite', label: '亚硝酸盐（mg/L）' }
+  { key: 'sub_nitrate', label: '亚硝酸盐（mg/L）' }
 ]
 
 const chartOptions = computed(() =>
@@ -126,8 +129,8 @@ const nutrientDataList = ref<NutrientDataItem[]>([])
 
 const normalizeModel = (value?: string) => (value || '').trim().toLowerCase()
 
-const isModelMatched = (shipModel: string, selectedModel: string) => {
-  const ship = normalizeModel(shipModel)
+const isModelMatched = (ship_model: string, selectedModel: string) => {
+  const ship = normalizeModel(ship_model)
   const selected = normalizeModel(selectedModel)
   if (!selected) return true
   return ship === selected || ship.includes(selected) || selected.includes(ship)
@@ -138,7 +141,7 @@ const filteredWaterQualityDataList = computed(() => {
     return waterQualityDataList.value
   }
 
-  return waterQualityDataList.value.filter((item) => isModelMatched(item.shipModel, props.selectedModel))
+  return waterQualityDataList.value.filter((item) => isModelMatched(item.ship_model, props.selectedModel))
 })
 
 const filteredNutrientDataList = computed(() => {
@@ -146,7 +149,7 @@ const filteredNutrientDataList = computed(() => {
     return nutrientDataList.value
   }
 
-  return nutrientDataList.value.filter((item) => isModelMatched(item.shipModel, props.selectedModel))
+  return nutrientDataList.value.filter((item) => isModelMatched(item.data_id, props.selectedModel))
 })
 
 const snapshotMap = computed<Record<string, number | string>>(() => {
@@ -159,22 +162,22 @@ const snapshotMap = computed<Record<string, number | string>>(() => {
     const latest = filteredWaterQualityDataList.value[0]
     if (!latest) return map
     map.temp = latest.temperature
-    map.ph = latest.ph
+    map.pH = latest.pH
     map.chlorophyll = latest.chlorophyll
     map.salinity = latest.salinity
-    map.oxygen = latest.dissolvedOxygen
+    map.oxygen = latest.dissolved_oxygen
     map.conductivity = latest.conductivity
     map.turbidity = latest.turbidity
-    map.cyanobacteria = latest.algae
+    map.cyanobacteria = latest['blue-green']
     return map
   }
 
   const latestNutrient = filteredNutrientDataList.value[0]
   if (!latestNutrient) return map
-  map.phosphate = latestNutrient.phosphate
-  map.ammonia = latestNutrient.ammonia
+  map.phosphates = latestNutrient.phosphates
+  map.ammonia_nitrogen = latestNutrient.ammonia_nitrogen
   map.nitrate = latestNutrient.nitrate
-  map.nitrite = latestNutrient.nitrite
+  map.sub_nitrate = latestNutrient.sub_nitrate
   return map
 })
 
@@ -185,43 +188,46 @@ const historyData = computed(() => {
   return [...source].reverse().slice(-MAX_POINTS)
 })
 
-const timeLabels = computed(() =>
-  historyData.value.map((item) => item.collectionTime?.slice(11) || item.collectionTime)
-)
+const timeLabels = computed(() => {
+  if (props.dataType === 'water') {
+    return (historyData.value as WaterQualityDataItem[]).map((item) => item.timestamp?.slice(11) || item.timestamp)
+  }
+  return (historyData.value as NutrientDataItem[]).map((item) => item.timestamp?.slice(11) || item.timestamp || '--')
+})
 
 const seriesDataMap = computed<Record<DataKey, number[]>>(() => {
   if (props.dataType === 'water') {
     const data = historyData.value as WaterQualityDataItem[]
     return {
       temp: data.map((item) => item.temperature),
-      ph: data.map((item) => item.ph),
+      pH: data.map((item) => item.pH),
       chlorophyll: data.map((item) => item.chlorophyll),
       salinity: data.map((item) => item.salinity),
-      oxygen: data.map((item) => item.dissolvedOxygen),
+      oxygen: data.map((item) => item.dissolved_oxygen),
       conductivity: data.map((item) => item.conductivity),
       turbidity: data.map((item) => item.turbidity),
-      cyanobacteria: data.map((item) => item.algae),
-      phosphate: [],
-      ammonia: [],
+      cyanobacteria: data.map((item) => item['blue-green']),
+      phosphates: [],
+      ammonia_nitrogen: [],
       nitrate: [],
-      nitrite: []
+      sub_nitrate: []
     }
   }
 
   const data = historyData.value as NutrientDataItem[]
   return {
     temp: [],
-    ph: [],
+    pH: [],
     chlorophyll: [],
     salinity: [],
     oxygen: [],
     conductivity: [],
     turbidity: [],
     cyanobacteria: [],
-    phosphate: data.map((item) => item.phosphate),
-    ammonia: data.map((item) => item.ammonia),
+    phosphates: data.map((item) => item.phosphates),
+    ammonia_nitrogen: data.map((item) => item.ammonia_nitrogen),
     nitrate: data.map((item) => item.nitrate),
-    nitrite: data.map((item) => item.nitrite)
+    sub_nitrate: data.map((item) => item.sub_nitrate)
   }
 })
 
@@ -272,7 +278,7 @@ onBeforeUnmount(() => stopAutoRefresh())
 watch(
   () => props.dataType,
   (type) => {
-    selectedKey.value = type === 'water' ? 'temp' : 'phosphate'
+    selectedKey.value = type === 'water' ? 'temp' : 'phosphates'
   },
   { immediate: true }
 )

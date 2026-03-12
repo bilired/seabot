@@ -83,14 +83,15 @@ def check_water_quality():
     for item in latest:
         print(f"  船型: {item.ship_model}")
         print(f"  温度: {item.temperature}°C")
-        print(f"  pH值: {item.ph}")
+        print(f"  pH值: {item.pH}")
         print(f"  叶绿素a: {item.chlorophyll} mg/m³")
         print(f"  盐度: {item.salinity} PSU")
         print(f"  溶解氧: {item.dissolved_oxygen} mg/L")
         print(f"  电导率: {item.conductivity} mS/cm")
         print(f"  浊度: {item.turbidity} NTU")
-        print(f"  藻密度: {item.algae}")
+        print(f"  藻密度: {item.blue_green}")
         print(f"  采集时间: {item.collection_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"  警告码: {item.warn}")
         print(f"  连接状态: {item.connection_status}")
         print("  " + "-" * 66)
 
@@ -110,13 +111,15 @@ def check_nutrient_data():
     latest = data.order_by('-collection_time')[:5]
     
     for item in latest:
-        print(f"  船型: {item.ship_model}")
-        print(f"  磷酸盐: {item.phosphate} μmol/L")
-        print(f"  阿摩尼亚: {item.ammonia} μmol/L")
+        print(f"  数据ID: {item.ship_model}")
+        print(f"  时间戳: {item.timestamp}")
+        print(f"  连接状态: {item.status}")
+        print(f"  氨氮: {item.ammonia_nitrogen} mg/L")
         print(f"  硝酸盐: {item.nitrate} μmol/L")
-        print(f"  亚硝酸盐: {item.nitrite} μmol/L")
-        print(f"  采集时间: {item.collection_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"  连接状态: {item.connection_status}")
+        print(f"  亚硝酸盐: {item.sub_nitrate} mg/L")
+        print(f"  磷酸盐: {item.phosphates} mg/L")
+        print(f"  警告码: {item.warn}")
+        print(f"  入库时间: {item.collection_time.strftime('%Y-%m-%d %H:%M:%S')}")
         print("  " + "-" * 66)
 
 def check_dashboard_stats():

@@ -13,7 +13,7 @@
 
       <ElSteps :active="activeStep" finish-status="success" class="mb-6">
         <ElStep title="旧密码验证" description="输入当前登录密码" />
-        <ElStep title="短信验证码" description="发送并验证注册手机验证码" />
+        <ElStep title="短信验证码" description="发送并填写验证码" />
         <ElStep title="设置新密码" description="输入并确认新密码" />
       </ElSteps>
 
@@ -36,16 +36,12 @@
             <ElInput
               v-model.trim="form.smsCode"
               placeholder="请输入短信验证码"
-              @input="smsVerified = false"
             />
             <ElButton :loading="sendCodeLoading" :disabled="sendCodeLoading || countDown > 0" @click="sendCode">
               {{ sendCodeButtonText }}
             </ElButton>
-            <ElButton type="primary" plain :loading="verifyCodeLoading" @click="verifyCode">验证验证码</ElButton>
           </div>
-          <div class="mt-2 text-xs" :class="smsVerified ? 'text-green-600' : 'text-g-500'">
-            {{ smsVerified ? '验证码已通过校验' : '请先发送并校验验证码' }}
-          </div>
+          <div class="mt-2 text-xs text-g-500">验证码将在确认修改时一并校验</div>
         </ElFormItem>
 
         <ElFormItem label="新密码" prop="newPassword">
@@ -85,8 +81,7 @@
   import {
     fetchChangePassword,
     fetchGetUserInfo,
-    fetchSendChangePasswordSmsCode,
-    fetchVerifyChangePasswordSmsCode
+    fetchSendChangePasswordSmsCode
   } from '@/api/auth'
   import { HttpError } from '@/utils/http/error'
   import { useUserStore } from '@/store/modules/user'
@@ -98,7 +93,6 @@
 
   const formRef = ref<FormInstance>()
   const sendCodeLoading = ref(false)
-  const verifyCodeLoading = ref(false)
   const submitLoading = ref(false)
   const smsVerified = ref(false)
   const countDown = ref(0)
@@ -118,7 +112,7 @@
     if (form.newPassword && form.confirmPassword) {
       return 2
     }
-    if (smsVerified.value || form.smsCode) {
+    if (form.smsCode) {
       return 1
     }
     return 0
@@ -203,27 +197,6 @@
     }
   }
 
-  const verifyCode = async () => {
-    if (!form.smsCode) {
-      ElMessage.warning('请先输入短信验证码')
-      return
-    }
-
-    try {
-      verifyCodeLoading.value = true
-      await fetchVerifyChangePasswordSmsCode({ smsCode: form.smsCode })
-      smsVerified.value = true
-      ElMessage.success('验证码校验通过')
-    } catch (error) {
-      smsVerified.value = false
-      if (!(error instanceof HttpError)) {
-        console.error('验证码校验失败:', error)
-      }
-    } finally {
-      verifyCodeLoading.value = false
-    }
-  }
-
   const submitChange = async () => {
     if (!formRef.value) {
       return
@@ -231,11 +204,6 @@
 
     try {
       await formRef.value.validate()
-
-      if (!smsVerified.value) {
-        ElMessage.warning('请先完成短信验证码校验')
-        return
-      }
 
       submitLoading.value = true
       await fetchChangePassword({
@@ -262,7 +230,6 @@
     form.smsCode = ''
     form.newPassword = ''
     form.confirmPassword = ''
-    smsVerified.value = false
     formRef.value?.clearValidate()
   }
 

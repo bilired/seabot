@@ -9,6 +9,8 @@ urlpatterns = [
     path('user/password/sms/send/', views.send_change_password_sms_code_view, name='change_password_sms_send'),
     path('user/password/sms/verify/', views.verify_change_password_sms_code_view, name='change_password_sms_verify'),
     path('user/password/change/', views.change_password_view, name='change_password'),
+        path('user/password/reset/sms/send/', views.send_forget_password_sms_code_view, name='forget_password_sms_send'),
+        path('user/password/reset/', views.reset_password_view, name='reset_password'),
     path('login/', views.login_view, name='login'),
     path('user/info/', views.user_info_view, name='user_info'),
     path('user/profile/update/', views.update_user_profile_view, name='user_profile_update'),
@@ -35,4 +37,5 @@ urlpatterns = [
     path('drone/image-history/list/', views.get_image_transfer_history, name='image_transfer_history_list'),
     path('drone/image-history/delete/', views.delete_image_transfer_record, name='image_transfer_history_delete'),
     path('drone/image-history/batch-delete/', views.batch_delete_image_transfer_records, name='image_transfer_history_batch_delete'),
+    path('drone/image-history/batch-delete-by-uid/', views.batch_delete_image_transfer_records_by_uid, name='image_transfer_history_batch_delete_by_uid'),
 ]

@@ -128,17 +128,39 @@ def parse_water_payload(ship_model: str, input_text: str) -> dict:
     if len(parts) != 10:
         raise ValueError(f'无效水质数据格式，应有10个字段，实际收到 {len(parts)} 个')
 
+    raw_timestamp = parts[0].strip() if parts[0] else ''
+
+    parsed_timestamp = None
+    if raw_timestamp:
+        for fmt in ('%Y%m%d%H%M%S', '%Y-%m-%d %H:%M:%S', '%Y/%m/%d %H:%M:%S'):
+            try:
+                parsed_timestamp = datetime.strptime(raw_timestamp, fmt).replace(tzinfo=timezone.utc)
+                break
+            except ValueError:
+                continue
+
+        if parsed_timestamp is None:
+            # Fallback for unix epoch (seconds or milliseconds).
+            try:
+                epoch = float(raw_timestamp)
+                if epoch > 10_000_000_000:
+                    epoch /= 1000.0
+                parsed_timestamp = datetime.fromtimestamp(epoch, tz=timezone.utc)
+            except ValueError:
+                parsed_timestamp = None
+
     return {
         'ship_model': str(ship_model),
+        'timestamp': parsed_timestamp,
         'temperature': float(parts[2]) if parts[2] else 0.0,
-        'ph': float(parts[3]) if parts[3] else 0.0,
+        'pH': float(parts[3]) if parts[3] else 0.0,
         'conductivity': float(parts[4]) if parts[4] else 0.0,
         'salinity': float(parts[5]) if parts[5] else 0.0,
         'turbidity': float(parts[6]) if parts[6] else 0.0,
         'chlorophyll': float(parts[7]) if parts[7] else 0.0,
-        'algae': int(round(float(parts[8]))) if parts[8] else 0,
+        'blue_green': float(parts[8]) if parts[8] else 0.0,
         'dissolved_oxygen': float(parts[9]) if parts[9] else 0.0,
-        'warning_code': parts[1] or '正常',
+        'warn': parts[1] or '0',
         'connection_status': '在线',
     }
 
@@ -151,37 +173,44 @@ def _parse_device_time(value: str) -> datetime:
 def parse_nutrient_payload(ship_model: str, input_text: str) -> dict:
     cleaned = input_text.strip().rstrip(':')
     parts = cleaned.split('|')
-    if len(parts) < 11:
-        raise ValueError(f'无效营养盐数据格式，至少11个字段，实际收到 {len(parts)} 个')
+    if len(parts) < 12:
+        raise ValueError(f'无效营养盐数据格式，至少12个字段，实际收到 {len(parts)} 个')
 
-    phosphate_value = parts[0].lstrip('Y')
+    data_id = parts[0].strip()
+    if not data_id:
+        raise ValueError('无效营养盐数据格式，缺少 data_id 字段')
+
+    def _to_int(value: str, default: int = 0) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
     return {
-        'ship_model': str(ship_model),
-        'phosphate': float(phosphate_value) if phosphate_value else 0.0,
-        'phosphate_time': _parse_device_time(parts[1]) if parts[1] else datetime.now(timezone.utc),
-        'ammonia': float(parts[2]) if parts[2] else 0.0,
-        'ammonia_time': _parse_device_time(parts[3]) if parts[3] else datetime.now(timezone.utc),
-        'nitrate': float(parts[4]) if parts[4] else 0.0,
-        'nitrate_time': _parse_device_time(parts[5]) if parts[5] else datetime.now(timezone.utc),
-        'nitrite': float(parts[6]) if parts[6] else 0.0,
-        'nitrite_time': _parse_device_time(parts[7]) if parts[7] else datetime.now(timezone.utc),
-        'error_code1': str(parts[8]) if len(parts) > 8 and parts[8] != '' else '00',
-        'error_code2': str(parts[9]) if len(parts) > 9 and parts[9] != '' else '00',
-        'instrument_status': str(parts[10]) if len(parts) > 10 and parts[10] != '' else '正常',
-        'connection_status': '在线',
+        'ship_model': data_id,
+        'timestamp': _parse_device_time(parts[1]) if parts[1] else datetime.now(timezone.utc),
+        'status': _to_int(parts[2], 0),
+        'ammonia_nitrogen': float(parts[3]) if parts[3] else 0.0,
+        'ammonia_nitrogen_timestamp': _parse_device_time(parts[4]) if parts[4] else datetime.now(timezone.utc),
+        'nitrate': float(parts[5]) if parts[5] else 0.0,
+        'nitrate_timestamp': _parse_device_time(parts[6]) if parts[6] else datetime.now(timezone.utc),
+        'sub_nitrate': float(parts[7]) if parts[7] else 0.0,
+        'sub_nitrate_timestamp': _parse_device_time(parts[8]) if parts[8] else datetime.now(timezone.utc),
+        'phosphates': float(parts[9]) if parts[9] else 0.0,
+        'phosphates_timestamp': _parse_device_time(parts[10]) if parts[10] else datetime.now(timezone.utc),
+        'warn': str(parts[11]) if parts[11] != '' else '0',
     }
 
 
 def parse_boat_payload(input_text: str) -> dict:
     """Parse type-B boat status payload.
 
-    Expected format (8 fields):
-    shipModel|boatTimestamp|status|latitude|longitude|speed|direction|batteryVoltage
+    Protocol format (8 fields):
+    data_id|timestamp|latitude|longitude|course|speed|battery_level|water_extraction
     """
     parts = input_text.strip().split('|')
     if len(parts) < 1 or not parts[0].strip():
-        raise ValueError('无效船体数据格式，缺少 shipModel 字段')
+        raise ValueError('无效船体数据格式，缺少 data_id 字段')
 
     def _to_float(value: str):
         return float(value) if value != '' else None
@@ -194,12 +223,12 @@ def parse_boat_payload(input_text: str) -> dict:
     if len(parts) >= 8:
         data.update({
             'boat_timestamp': parts[1] or None,
-            'status': parts[2] or None,
-            'latitude': _to_float(parts[3]),
-            'longitude': _to_float(parts[4]),
+            'latitude': _to_float(parts[2]),
+            'longitude': _to_float(parts[3]),
+            'course': _to_float(parts[4]),
             'speed': _to_float(parts[5]),
-            'direction': _to_float(parts[6]),
-            'battery_voltage': _to_float(parts[7]),
+            'battery_level': parts[6] or None,
+            'water_extraction': parts[7] or None,
         })
 
     return data
@@ -218,15 +247,30 @@ def _parse_boat_device_time(value: str | None) -> datetime | None:
 def parse_depth_payload(input_text: str) -> dict:
     """Parse type-D depth payload.
 
-    Common format: depth|reserved
+    Protocol format: timestamp|depth
     """
     parts = input_text.strip().rstrip(':').split('|')
-    if not parts or parts[0] == '':
+    if len(parts) < 2 or parts[1] == '':
         raise ValueError('无效深度数据格式，缺少 depth 字段')
 
+    raw_timestamp = parts[0].strip()
+    parsed_timestamp = None
+    for fmt in ('%Y%m%d%H%M%S', '%Y-%m-%d %H:%M:%S', '%Y/%m/%d %H:%M:%S'):
+        try:
+            from datetime import datetime
+            parsed_timestamp = datetime.strptime(raw_timestamp, fmt).isoformat()
+            break
+        except ValueError:
+            continue
+    if parsed_timestamp is None:
+        try:
+            parsed_timestamp = datetime.utcfromtimestamp(float(raw_timestamp)).isoformat()
+        except (ValueError, OSError):
+            parsed_timestamp = raw_timestamp
+
     return {
-        'depth': float(parts[0]),
-        'raw': input_text.strip(),
+        'timestamp': parsed_timestamp,
+        'depth': float(parts[1]),
     }
 
 
@@ -496,12 +540,12 @@ class ShipGatewayService:
                         ship_port=ship_port,
                         boat_timestamp=boat_payload.get('boat_timestamp'),
                         device_time=_parse_boat_device_time(boat_payload.get('boat_timestamp')),
-                        status=boat_payload.get('status'),
                         latitude=latitude,
                         longitude=longitude,
+                        course=boat_payload.get('course'),
                         speed=boat_payload.get('speed'),
-                        direction=boat_payload.get('direction'),
-                        battery_voltage=boat_payload.get('battery_voltage'),
+                        battery_level=boat_payload.get('battery_level'),
+                        water_extraction=boat_payload.get('water_extraction'),
                     )
 
                 with self._lock:

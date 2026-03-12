@@ -100,7 +100,7 @@
     timestamp: number
     coordinate: [number, number]
     speed?: number | null
-    direction?: number | null
+    course?: number | null
   }
 
   interface DailyTrack {
@@ -183,7 +183,6 @@
     return `${y}-${m}-${d}`
   }
 
-<<<<<<< HEAD
   const parseDateTime = (value?: string | null) => {
     if (!value) return null
     const normalized = value.includes('T') ? value : value.replace(' ', 'T')
@@ -192,12 +191,12 @@
   }
 
   const loadTrackHistory = async () => {
-    const params: { shipModel?: string; days: number } = {
+    const params: { ship_model?: string; days: number } = {
       days: 30
     }
 
     if (deviceModel.value) {
-      params.shipModel = deviceModel.value
+      params.ship_model = deviceModel.value
     }
 
     const history = await fetchShipTrackHistory(params)
@@ -216,7 +215,7 @@
         timestamp,
         coordinate: [item.longitude, item.latitude],
         speed: item.speed,
-        direction: item.direction
+        course: item.course
       })
 
       grouped.set(dateKey, datePoints)
@@ -235,8 +234,6 @@
     }
   }
 
-=======
->>>>>>> 188b90e454c43b86d79b41a77e36bed61fc9221c
   const clearTrackMarkers = () => {
     markers.forEach((marker) => marker.remove())
     markers = []
@@ -261,7 +258,6 @@
       map.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
       map.on('load', async () => {
-<<<<<<< HEAD
         try {
           await loadTrackHistory()
           drawTrack()
@@ -270,9 +266,6 @@
           ElMessage.warning('加载历史轨迹失败，已切换实时轨迹')
         }
 
-=======
-        await loadPersistedTracks()
->>>>>>> 188b90e454c43b86d79b41a77e36bed61fc9221c
         await pollTrack()
         startPolling()
       })
@@ -341,7 +334,7 @@
         .setLngLat(selected.coordinate)
         .setPopup(
           new mapboxgl.Popup().setHTML(
-            `<strong>${selected.time}</strong><br/>速度: ${selected.speed ?? '-'} 节<br/>航向: ${selected.direction ?? '-'}°`
+            `<strong>${selected.time}</strong><br/>速度: ${selected.speed ?? '-'} 节<br/>航向: ${selected.course ?? '-'}°`
           )
         )
         .addTo(map)
@@ -444,7 +437,7 @@
       timestamp: now.getTime(),
       coordinate: nextPoint,
       speed: packet.speed,
-      direction: packet.direction
+      course: packet.course
     })
 
     if (dayPoints.length > 2000) {
@@ -454,13 +447,12 @@
     selectedTrackIndex.value = dayIndex
     progressValue.value = Math.max(dayPoints.length - 1, 0)
     drawTrack()
-<<<<<<< HEAD
-=======
+
   }
 
   const loadPersistedTracks = async () => {
     const records = await fetchShipTrackHistory({
-      shipModel: deviceModel.value || undefined,
+      ship_model: deviceModel.value || undefined,
       days: 7
     })
 
@@ -479,7 +471,7 @@
         timestamp: ts,
         coordinate: [item.longitude, item.latitude],
         speed: item.speed,
-        direction: item.direction
+        course: item.course
       })
       grouped.set(dateKey, points)
     }
@@ -496,7 +488,6 @@
       progressValue.value = Math.max((currentDayTrack.value?.points.length || 1) - 1, 0)
       drawTrack()
     }
->>>>>>> 188b90e454c43b86d79b41a77e36bed61fc9221c
   }
 
   const handleClose = () => {

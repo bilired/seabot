@@ -4,19 +4,23 @@
       <div class="title">
         <h4>设备位置</h4>
       </div>
-      <div class="flex gap-2">
+      <div class="flex gap-2 items-center">
+        <span class="legend-item"><span class="legend-dot" style="background:#e53e3e"></span>DL-3022 在线</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#2b6cb0"></span>DL-3026 在线</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#888"></span>离线</span>
         <ElButton @click="toggleFullscreen" type="primary" size="small">全屏</ElButton>
         <ElButton @click="resetView" type="default" size="small">重置视图</ElButton>
       </div>
     </div>
-    <div ref="mapContainer" class="mapbox-container" style="height: 90%"></div>
+    <div ref="mapContainer" class="mapbox-container" style="height: 85%"></div>
   </div>
 </template>
 
 <script setup lang="ts">
   import { ElMessage } from 'element-plus'
   import mapboxgl from 'mapbox-gl'
-  import { fetchShipGatewayStatus } from '@/api/drone'
+  import type { DeviceLocation } from '@/api/drone'
+  import { fetchDeviceLocations } from '@/api/drone'
 
   const MAPBOX_TOKEN =
     import.meta.env.VITE_MAPBOX_TOKEN ||
@@ -25,8 +29,49 @@
 
   const mapContainer = ref<HTMLElement>()
   let map: mapboxgl.Map | null = null
+  // key = ship_model
   const markers = new Map<string, mapboxgl.Marker>()
   let pollingTimer: number | null = null
+  let initialFitDone = false
+
+  /** Resolve marker color by model + online status */
+  function markerColor(loc: DeviceLocation): string {
+    if (!loc.online) return '#888888'
+    const m = (loc.ship_model || '').toUpperCase()
+    if (m.includes('DL-3022')) return '#e53e3e'
+    if (m.includes('DL-3026')) return '#2b6cb0'
+    return '#1890ff'
+  }
+
+  function buildMarkerEl(loc: DeviceLocation): HTMLElement {
+    const color = markerColor(loc)
+    const el = document.createElement('div')
+    el.className = 'ship-marker'
+    el.style.borderColor = color
+    el.style.background = `${color}22`
+    // Arrow svg rotated to course
+    const course = loc.course ?? 0
+    el.innerHTML = `<svg viewBox="0 0 24 24" width="38" height="38" style="transform:rotate(${course}deg);display:block">
+      <path d="M12 2 L19 20 L12 15 L5 20 Z" fill="${color}" stroke="white" stroke-width="1"/>
+    </svg>`
+    el.style.opacity = loc.online ? '1' : '0.55'
+    return el
+  }
+
+  function buildPopup(loc: DeviceLocation): mapboxgl.Popup {
+    const statusLabel = loc.online
+      ? '<span style="color:#68d391">● 在线</span>'
+      : `<span style="color:#aaa">● 离线（最后位置 ${loc.recorded_at ?? ''}）</span>`
+    const html = `
+      <div>
+        <div><strong>${loc.ship_model}</strong> &nbsp; ${statusLabel}</div>
+        <div>经纬度: ${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}</div>
+        <div>速度: ${loc.speed ?? '-'} 节 &nbsp; 航向: ${loc.course ?? '-'}°</div>
+        ${loc.battery_level ? `<div>电量: ${loc.battery_level}</div>` : ''}
+      </div>
+    `
+    return new mapboxgl.Popup({ offset: 20 }).setHTML(html)
+  }
 
   onMounted(() => {
     if (mapContainer.value) {
@@ -47,10 +92,7 @@
           bearing: 0
         })
 
-        // 添加导航控件
         map.addControl(new mapboxgl.NavigationControl(), 'top-right')
-        
-        // 添加缩放级别显示
         map.addControl(new mapboxgl.ScaleControl(), 'bottom-left')
 
         map.on('load', async () => {
@@ -86,65 +128,71 @@
   const refreshBoatMarkers = async () => {
     if (!map) return
 
-    const status = await fetchShipGatewayStatus()
-    const packets = status?.last_boat_packets || {}
-    const activePorts = new Set<string>()
+    let locations: DeviceLocation[] = []
+    try {
+      const res = await fetchDeviceLocations()
+      locations = Array.isArray(res) ? res : ((res as any)?.data ?? [])
+    } catch {
+      return
+    }
+
+    const activeModels = new Set<string>()
     const points: [number, number][] = []
 
-    Object.entries(packets).forEach(([port, packet]) => {
-      const lng = packet.longitude
-      const lat = packet.latitude
-      if (lng == null || lat == null) return
+    locations.forEach((loc) => {
+      const key = loc.ship_model
+      if (loc.latitude == null || loc.longitude == null) return
 
-      activePorts.add(port)
-      points.push([lng, lat])
+      activeModels.add(key)
+      if (loc.online) points.push([loc.longitude, loc.latitude])
 
-      const popupHtml = `
-        <div>
-          <div><strong>${packet.ship_model || `船体-${port}`}</strong></div>
-          <div>端口: ${port}</div>
-          <div>经纬度: ${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
-          <div>速度: ${packet.speed ?? '-'} 节</div>
-          <div>航向: ${packet.direction ?? '-'}°</div>
-        </div>
-      `
-
-      if (markers.has(port)) {
-        markers.get(port)!.setLngLat([lng, lat]).setPopup(new mapboxgl.Popup({ offset: 20 }).setHTML(popupHtml))
+      if (markers.has(key)) {
+        const marker = markers.get(key)!
+        // Update position
+        marker.setLngLat([loc.longitude, loc.latitude])
+        // Update popup
+        marker.setPopup(buildPopup(loc))
+        // Update visual: target the .ship-marker div inside Mapbox's wrapper
+        const wrapper = marker.getElement()
+        const el = (wrapper.querySelector('.ship-marker') as HTMLElement) ?? wrapper
+        const color = markerColor(loc)
+        el.style.borderColor = color
+        el.style.background = `${color}22`
+        el.style.opacity = loc.online ? '1' : '0.55'
+        el.innerHTML = `<svg viewBox="0 0 24 24" width="28" height="28" style="transform:rotate(${loc.course ?? 0}deg);display:block">
+          <path d="M12 2 L19 20 L12 15 L5 20 Z" fill="${color}" stroke="white" stroke-width="1"/>
+        </svg>`
       } else {
-        const el = document.createElement('div')
-        el.className = 'ship-marker'
-        el.textContent = '⛵'
-        el.style.transform = `rotate(${packet.direction || 0}deg)`
-
+        const el = buildMarkerEl(loc)
         const marker = new mapboxgl.Marker({ element: el })
-          .setLngLat([lng, lat])
-          .setPopup(new mapboxgl.Popup({ offset: 20 }).setHTML(popupHtml))
+          .setLngLat([loc.longitude, loc.latitude])
+          .setPopup(buildPopup(loc))
           .addTo(map!)
-
-        markers.set(port, marker)
+        markers.set(key, marker)
       }
     })
 
-    Array.from(markers.keys()).forEach((port) => {
-      if (!activePorts.has(port)) {
-        markers.get(port)?.remove()
-        markers.delete(port)
+    // Remove markers for models no longer in any response
+    Array.from(markers.keys()).forEach((key) => {
+      if (!activeModels.has(key)) {
+        markers.get(key)?.remove()
+        markers.delete(key)
       }
     })
 
-    if (points.length > 0) {
+    // Auto-fit only on the very first load; never interrupt user pan/zoom after that
+    if (!initialFitDone && points.length > 0) {
       const bounds = points.reduce(
         (b, p) => b.extend(p),
         new mapboxgl.LngLatBounds(points[0], points[0])
       )
-      map.fitBounds(bounds, { padding: 40, maxZoom: 14, duration: 800 })
+      map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 800 })
+      initialFitDone = true
     }
   }
 
   const toggleFullscreen = () => {
     if (!mapContainer.value) return
-
     if (!document.fullscreenElement) {
       mapContainer.value.requestFullscreen?.()
     } else {
@@ -154,12 +202,7 @@
 
   const resetView = () => {
     if (!map) return
-
-    map.flyTo({
-      center: [114.3, 30.5],
-      zoom: 10,
-      duration: 1500
-    })
+    map.flyTo({ center: [114.3, 30.5], zoom: 10, duration: 1500 })
   }
 </script>
 
@@ -171,17 +214,33 @@
     overflow: hidden;
   }
 
-  .ship-marker {
-    width: 28px;
-    height: 28px;
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--art-text-gray-600);
+    white-space: nowrap;
+  }
+
+  .legend-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: rgba(24, 144, 255, 0.18);
-    border: 2px solid #1890ff;
+    flex-shrink: 0;
+  }
+
+  .ship-marker {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2.5px solid #1890ff;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
     cursor: pointer;
+    transition: opacity 0.3s;
   }
 
   :deep(.mapboxgl-popup-content) {
@@ -190,6 +249,7 @@
     padding: 8px 12px;
     border-radius: 4px;
     font-size: 14px;
+    min-width: 200px;
   }
 
   :deep(.mapboxgl-popup-close-button) {
@@ -198,14 +258,12 @@
 
   :deep(.mapboxgl-ctrl) {
     background: white;
-    border-radius: 4px;
-    margin: 10px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
-  :deep(.mapboxgl-ctrl-bottom-left) {
-    display: flex;
-    align-items: center;
-    padding: 8px;
+  /* Remove any background/border Mapbox may inject into the marker wrapper div */
+  :deep(.mapboxgl-marker) {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
   }
 </style>

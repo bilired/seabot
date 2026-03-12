@@ -10,12 +10,14 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from django.db.models import Q
 from django.db import transaction
+from django.conf import settings
 from django.core.files.storage import default_storage
 from uuid import uuid4
 import os
 import re
 from pathlib import Path
 from datetime import timedelta, datetime
+from urllib.parse import urlparse, unquote
 from .models import DashboardStats, UserActivity, DroneDevice, UserProfile, ImageTransferRecord
 from .sms_verify.service import send_sms_verify_code, check_sms_verify_code
 from monitoring.ship_gateway import gateway_service
@@ -45,6 +47,49 @@ def _get_user_mobile(user: User) -> str:
     profile, _ = UserProfile.objects.get_or_create(user=user)
     mobile = (profile.mobile or user.last_name or '').strip()
     return mobile
+
+
+def _storage_name_from_image_url(image_url: str) -> str:
+    """Convert public image URL to default storage name (e.g. drone/xxx.jpg)."""
+    raw_url = (image_url or '').strip()
+    if not raw_url:
+        return ''
+
+    parsed = urlparse(raw_url)
+    path = parsed.path if (parsed.scheme or parsed.netloc) else raw_url
+    path = unquote((path or '').strip())
+    if not path:
+        return ''
+
+    media_url = (settings.MEDIA_URL or '/media/').strip()
+    if media_url and not media_url.startswith('/'):
+        media_url = f'/{media_url}'
+    if media_url and path.startswith(media_url):
+        path = path[len(media_url):]
+
+    return path.lstrip('/')
+
+
+def _delete_image_file_if_orphan(image_url: str) -> None:
+    """Delete image from storage only when no DB entity references it anymore."""
+    storage_name = _storage_name_from_image_url(image_url)
+    if not storage_name:
+        return
+
+    if ImageTransferRecord.objects.filter(image_url=image_url).exists():
+        return
+    if DroneDevice.objects.filter(image=image_url).exists():
+        return
+
+    if default_storage.exists(storage_name):
+        default_storage.delete(storage_name)
+
+
+def _detach_drone_device_image(image_url: str) -> None:
+    """Detach device image reference so user-initiated history delete can fully remove file."""
+    if not image_url:
+        return
+    DroneDevice.objects.filter(image=image_url).update(image='')
 
 @api_view(['POST'])
 @permission_classes([])  # 允许任何人注册
@@ -625,6 +670,16 @@ def menu_list_view(request):
             "meta": {
                 "title": "数据监测",
                 "icon": "ri:align-item-bottom-line",
+                "roles": ["R_ADMIN", "R_USER"]
+            }
+        },
+        {
+            "path": "/video-stream-monitor",
+            "name": "VideoStreamMonitor",
+            "component": "/dashboard/video-stream-monitor",
+            "meta": {
+                "title": "视频流监测",
+                "icon": "ri:video-on-line",
                 "roles": ["R_ADMIN", "R_USER"]
             }
         },
@@ -1315,7 +1370,7 @@ def upload_drone_image(request):
     except (TypeError, ValueError):
         ship_port = None
 
-    ship_model = (request.data.get('shipModel') or request.data.get('model') or '').strip()
+    ship_model = (request.data.get('ship_model') or request.data.get('model') or '').strip()
     if not ship_model and ship_port is not None:
         gateway_status = gateway_service.status()
         reported_models = gateway_status.get('reported_models') or {}
@@ -1409,7 +1464,7 @@ def get_image_transfer_history(request):
         data = [
             {
                 "id": str(item.id),
-                "shipModel": item.ship_model,
+                "ship_model": item.ship_model,
                 "imageUid": item.image_uid,
                 "timestamp": timezone.localtime(item.timestamp).strftime('%Y-%m-%d %H:%M:%S'),
                 "imageFormat": item.image_format,
@@ -1448,12 +1503,27 @@ def delete_image_transfer_record(request):
             "msg": "记录ID不能为空"
         }, status=status.HTTP_200_OK)
 
+    record = ImageTransferRecord.objects.filter(id=record_id, owner=request.user).first()
+    if record is None:
+        return Response({
+            "code": 404,
+            "msg": "记录不存在"
+        }, status=status.HTTP_200_OK)
+
+    image_url = record.image_url
     deleted, _ = ImageTransferRecord.objects.filter(id=record_id, owner=request.user).delete()
     if deleted == 0:
         return Response({
             "code": 404,
             "msg": "记录不存在"
         }, status=status.HTTP_200_OK)
+
+    # Best effort cleanup: keep API delete successful even if storage cleanup fails.
+    try:
+        _detach_drone_device_image(image_url)
+        _delete_image_file_if_orphan(image_url)
+    except Exception:
+        pass
 
     return Response({
         "code": 200,
@@ -1472,7 +1542,54 @@ def batch_delete_image_transfer_records(request):
             "msg": "记录ID列表不能为空"
         }, status=status.HTTP_200_OK)
 
-    deleted, _ = ImageTransferRecord.objects.filter(id__in=ids, owner=request.user).delete()
+    records = ImageTransferRecord.objects.filter(id__in=ids, owner=request.user)
+    image_urls = list(records.values_list('image_url', flat=True))
+    deleted, _ = records.delete()
+
+    for image_url in set(image_urls):
+        try:
+            _detach_drone_device_image(image_url)
+            _delete_image_file_if_orphan(image_url)
+        except Exception:
+            continue
+
+    return Response({
+        "code": 200,
+        "msg": "删除成功",
+        "data": {
+            "deleted": deleted
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([])
+def batch_delete_image_transfer_records_by_uid(request):
+    """匿名批量删除图片传输历史（按 imageUid）。"""
+    image_uids = request.data.get('imageUids')
+    if not isinstance(image_uids, list) or not image_uids:
+        return Response({
+            "code": 400,
+            "msg": "imageUids 列表不能为空"
+        }, status=status.HTTP_200_OK)
+
+    normalized_uids = [str(uid).strip() for uid in image_uids if str(uid).strip()]
+    if not normalized_uids:
+        return Response({
+            "code": 400,
+            "msg": "imageUids 列表不能为空"
+        }, status=status.HTTP_200_OK)
+
+    records = ImageTransferRecord.objects.filter(image_uid__in=normalized_uids)
+    image_urls = list(records.values_list('image_url', flat=True))
+    deleted, _ = records.delete()
+
+    for image_url in set(image_urls):
+        try:
+            _detach_drone_device_image(image_url)
+            _delete_image_file_if_orphan(image_url)
+        except Exception:
+            continue
 
     return Response({
         "code": 200,
@@ -1567,6 +1684,102 @@ def get_user_growth(request):
             "code": 500,
             "msg": f"获取用户增长数据失败: {str(e)}"
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+@api_view(['POST'])
+@permission_classes([])
+def send_forget_password_sms_code_view(request):
+    """忘记密码：验证用户名+手机号匹配后发送短信验证码（无需登录）"""
+    username = (request.data.get('username') or request.data.get('userName') or '').strip()
+    mobile = (request.data.get('mobile') or request.data.get('phone') or '').strip()
+
+    if not username:
+        return Response({"code": 400, "msg": "用户名不能为空"}, status=status.HTTP_200_OK)
+    if not mobile:
+        return Response({"code": 400, "msg": "手机号不能为空"}, status=status.HTTP_200_OK)
+    if not _is_valid_mobile(mobile):
+        return Response({"code": 400, "msg": "手机号格式不正确"}, status=status.HTTP_200_OK)
+
+    # 验证用户名与手机号是否匹配
+    try:
+        user = User.objects.get(username=username, is_active=True)
+    except User.DoesNotExist:
+        return Response({"code": 400, "msg": "用户名不存在或账号已停用"}, status=status.HTTP_200_OK)
+
+    user_mobile = _get_user_mobile(user)
+    if user_mobile != mobile:
+        return Response({"code": 400, "msg": "用户名与手机号不匹配"}, status=status.HTTP_200_OK)
+
+    try:
+        success, message, _ = send_sms_verify_code(mobile)
+    except Exception as e:
+        return Response({"code": 500, "msg": f"验证码发送异常：{str(e)}"}, status=status.HTTP_200_OK)
+
+    if not success:
+        return Response({"code": 400, "msg": message or "验证码发送失败"}, status=status.HTTP_200_OK)
+
+    masked = f"{mobile[:3]}****{mobile[-4:]}" if len(mobile) >= 7 else mobile
+    return Response({
+        "code": 200,
+        "msg": message or "验证码发送成功",
+        "data": {"mobile": masked}
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([])
+def reset_password_view(request):
+    """忘记密码：通过用户名+手机号+短信验证码重置密码（无需登录）"""
+    username = (request.data.get('username') or request.data.get('userName') or '').strip()
+    mobile = (request.data.get('mobile') or request.data.get('phone') or '').strip()
+    sms_code = (request.data.get('smsCode') or request.data.get('verifyCode') or '').strip()
+    new_password = (request.data.get('newPassword') or '').strip()
+    confirm_password = (request.data.get('confirmPassword') or '').strip()
+
+    if not username:
+        return Response({"code": 400, "msg": "用户名不能为空"}, status=status.HTTP_200_OK)
+    if not mobile:
+        return Response({"code": 400, "msg": "手机号不能为空"}, status=status.HTTP_200_OK)
+    if not _is_valid_mobile(mobile):
+        return Response({"code": 400, "msg": "手机号格式不正确"}, status=status.HTTP_200_OK)
+    if not sms_code:
+        return Response({"code": 400, "msg": "验证码不能为空"}, status=status.HTTP_200_OK)
+    if not new_password or not confirm_password:
+        return Response({"code": 400, "msg": "新密码和确认密码不能为空"}, status=status.HTTP_200_OK)
+    if len(new_password) < 6:
+        return Response({"code": 400, "msg": "密码长度不能少于 6 个字符"}, status=status.HTTP_200_OK)
+    if new_password != confirm_password:
+        return Response({"code": 400, "msg": "两次密码输入不一致"}, status=status.HTTP_200_OK)
+
+    try:
+        user = User.objects.get(username=username, is_active=True)
+    except User.DoesNotExist:
+        return Response({"code": 400, "msg": "用户名不存在或账号已停用"}, status=status.HTTP_200_OK)
+
+    user_mobile = _get_user_mobile(user)
+    if user_mobile != mobile:
+        return Response({"code": 400, "msg": "用户名与手机号不匹配"}, status=status.HTTP_200_OK)
+
+    try:
+        verify_ok, verify_msg, _ = check_sms_verify_code(mobile, sms_code)
+    except Exception as e:
+        return Response({"code": 500, "msg": f"验证码校验异常：{str(e)}"}, status=status.HTTP_200_OK)
+
+    if not verify_ok:
+        return Response({"code": 400, "msg": verify_msg or "验证码校验失败"}, status=status.HTTP_200_OK)
+
+    user.set_password(new_password)
+    user.save(update_fields=['password'])
+
+    UserActivity.objects.create(
+        user=user,
+        activity_type='password_change',
+        description=f'{user.username} 通过忘记密码流程重置了登录密码'
+    )
+
+    return Response({"code": 200, "msg": "密码重置成功，请使用新密码登录"}, status=status.HTTP_200_OK)
 
 
 

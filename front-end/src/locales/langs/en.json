@@ -235,6 +235,7 @@
       "title": "Dashboard",
       "console": "Console",
       "analysis": "Data Monitoring",
+      "videoStreamMonitor": "Video Stream Monitor",
       "ecommerce": "Ecommerce"
     },
     "widgets": {

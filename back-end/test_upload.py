@@ -21,30 +21,36 @@ SHIP_MODELS = ["DL-3026", "DL-3022", "DL-3018"]
 def generate_water_quality_data(ship_model):
     """生成模拟的水质数据"""
     return {
-        "shipModel": ship_model,
+        "ship_model": ship_model,
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "warn": random.choice(["0", "0", "0", "1"]),
         "temperature": round(20 + random.uniform(-2, 8), 2),
-        "ph": round(7 + random.uniform(-0.5, 0.5), 2),
+        "pH": round(7 + random.uniform(-0.5, 0.5), 2),
         "chlorophyll": round(10 + random.uniform(0, 20), 2),
         "salinity": round(30 + random.uniform(-3, 5), 2),
-        "dissolvedOxygen": round(6 + random.uniform(0, 3), 2),
+        "dissolved_oxygen": round(6 + random.uniform(0, 3), 2),
         "conductivity": round(400 + random.uniform(-50, 150), 2),
         "turbidity": round(1 + random.uniform(0, 4), 2),
-        "algae": int(500 + random.uniform(-200, 1500)),
-        "warningCode": random.choice(["正常", "正常", "正常", "轻微异常", "注意"])
+        "blue-green": round(500 + random.uniform(-200, 1500), 2)
     }
 
 
 def generate_nutrient_data(ship_model):
     """生成模拟的营养盐数据"""
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     return {
-        "shipModel": ship_model,
-        "phosphate": round(random.uniform(0.1, 1.0), 2),
-        "ammonia": round(random.uniform(0.1, 0.8), 2),
+        "data_id": ship_model,
+        "timestamp": now,
+        "status": random.choice([0, 1]),
+        "ammonia_nitrogen": round(random.uniform(0.1, 0.8), 2),
+        "ammonia_nitrogen_timestamp": now,
         "nitrate": round(random.uniform(0.5, 3.0), 2),
-        "nitrite": round(random.uniform(0.01, 0.2), 2),
-        "errorCode1": random.choice(["00", "00", "00", "01"]),
-        "errorCode2": random.choice(["00", "00", "00", "02"]),
-        "instrumentStatus": random.choice(["正常", "正常", "正常", "预热中"])
+        "nitrate_timestamp": now,
+        "sub_nitrate": round(random.uniform(0.01, 0.2), 2),
+        "sub_nitrate_timestamp": now,
+        "phosphates": round(random.uniform(0.1, 1.0), 2),
+        "phosphates_timestamp": now,
+        "warn": random.choice(["0", "0", "0", "1"]),
     }
 
 
@@ -54,7 +60,7 @@ def upload_water_quality(data):
         response = requests.post(WATER_QUALITY_URL, json=data)
         if response.status_code == 201:
             result = response.json()
-            print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] 水质数据上传成功 - {data['shipModel']}")
+            print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] 水质数据上传成功 - {data['ship_model']}")
             return True
         else:
             print(f"❌ [{datetime.now().strftime('%H:%M:%S')}] 上传失败: {response.text}")
@@ -70,7 +76,7 @@ def upload_nutrient(data):
         response = requests.post(NUTRIENT_URL, json=data)
         if response.status_code == 201:
             result = response.json()
-            print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] 营养盐数据上传成功 - {data['shipModel']}")
+            print(f"✅ [{datetime.now().strftime('%H:%M:%S')}] 营养盐数据上传成功 - {data['data_id']}")
             return True
         else:
             print(f"❌ [{datetime.now().strftime('%H:%M:%S')}] 上传失败: {response.text}")

@@ -98,4 +98,24 @@ export function fetchChangePassword(data: {
   })
 }
 
+  export function fetchSendForgetPasswordSmsCode(data: { username: string; mobile: string }) {
+    return request.post<{ mobile: string }>({
+      url: '/api/user/password/reset/sms/send/',
+      data
+    })
+  }
+
+  export function fetchResetPassword(data: {
+    username: string
+    mobile: string
+    smsCode: string
+    newPassword: string
+    confirmPassword: string
+  }) {
+    return request.post({
+      url: '/api/user/password/reset/',
+      data
+    })
+  }
+
 

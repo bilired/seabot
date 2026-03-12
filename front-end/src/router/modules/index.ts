@@ -1,5 +1,5 @@
 import { AppRouteRecord } from '@/types/router'
-import { analysisRoute, consoleRoute } from './dashboard'
+import { analysisRoute, consoleRoute, videoStreamMonitorRoute } from './dashboard'
 import {
   changePasswordRoute,
   droneRoute,
@@ -14,6 +14,7 @@ import {
 export const routeModules: AppRouteRecord[] = [
   consoleRoute,
   analysisRoute,
+  videoStreamMonitorRoute,
   droneRoute,
   imageTransferHistoryRoute,
   userRoute,

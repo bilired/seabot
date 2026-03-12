@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--ship-model",
         default="DL-3022",
-        help="上传时附带的 shipModel，用于历史记录归档"
+        help="上传时附带的 ship_model，用于历史记录归档"
     )
     parser.add_argument(
         "--ship-port",
@@ -131,7 +131,7 @@ def upload_one(
 
     with image_path.open("rb") as f:
         files = {"file": (image_path.name, f, content_type)}
-        data = {"shipModel": ship_model, "shipPort": str(ship_port)}
+        data = {"ship_model": ship_model, "shipPort": str(ship_port)}
         headers = {"Authorization": f"Bearer {token}"} if token else {}
 
         try:
@@ -188,7 +188,7 @@ def check_history(base_url: str, token: str, timeout: int, verify_ssl: bool) -> 
     print(f"\n[INFO] 历史记录总数: {total}, 最近返回 {len(records)} 条")
     for i, item in enumerate(records, start=1):
         print(
-            f"  {i}. {item.get('imageUid')} | {item.get('shipModel')} | "
+            f"  {i}. {item.get('imageUid')} | {item.get('ship_model')} | "
             f"{item.get('timestamp')} | {item.get('imageFormat')}"
         )
 

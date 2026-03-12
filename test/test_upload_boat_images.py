@@ -26,7 +26,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="批量上传 boat-image 图片到后端")
     parser.add_argument(
         "--base-url",
-        default="http://8.130.132.91:9001/api",
+        default="http://127.0.0.1:8000/api",
+        # "https://yunpingtai.cc/api",
         help="后端 API 根地址，示例: http://127.0.0.1:8000/api"
     )
     parser.add_argument(
@@ -39,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--ship-model",
         default="DL-3022",
-        help="上传时附带的 shipModel，用于历史记录归档"
+        help="上传时附带的 ship_model，用于历史记录归档"
     )
     parser.add_argument(
         "--recursive",
@@ -72,6 +73,17 @@ def parse_args() -> argparse.Namespace:
         "--check-history",
         action="store_true",
         help="上传后拉取一次图像历史列表，快速确认入库"
+    )
+    parser.add_argument(
+        "--batch-delete",
+        action="store_true",
+        help="上传完成后，批量删除最近 delete_count 条历史记录（需要登录）"
+    )
+    parser.add_argument(
+        "--delete-count",
+        type=int,
+        default=5,
+        help="批量删除数量，默认 5"
     )
     return parser.parse_args()
 
@@ -118,13 +130,13 @@ def upload_one(
     ship_model: str,
     timeout: int,
     verify_ssl: bool,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, str]:
     url = f"{base_url.rstrip('/')}/drone/upload-image/"
     content_type = mimetypes.guess_type(str(image_path))[0] or "application/octet-stream"
 
     with image_path.open("rb") as f:
         files = {"file": (image_path.name, f, content_type)}
-        data = {"shipModel": ship_model}
+        data = {"ship_model": ship_model}
         headers = {"Authorization": f"Bearer {token}"} if token else {}
 
         try:
@@ -137,22 +149,22 @@ def upload_one(
                 verify=verify_ssl,
             )
         except requests.RequestException as exc:
-            return False, f"请求失败: {exc}"
+            return False, f"请求失败: {exc}", ""
 
     if resp.status_code != 200:
-        return False, f"HTTP {resp.status_code}: {resp.text}"
+        return False, f"HTTP {resp.status_code}: {resp.text}", ""
 
     try:
         body = resp.json()
     except ValueError:
-        return False, f"响应不是 JSON: {resp.text}"
+        return False, f"响应不是 JSON: {resp.text}", ""
 
     if body.get("code") != 200:
-        return False, f"业务失败 code={body.get('code')}, msg={body.get('msg')}"
+        return False, f"业务失败 code={body.get('code')}, msg={body.get('msg')}", ""
 
     image_uid = (body.get("data") or {}).get("imageUid", "")
     image_url = (body.get("data") or {}).get("url", "")
-    return True, f"imageUid={image_uid} url={image_url}"
+    return True, f"imageUid={image_uid} url={image_url}", str(image_uid or "")
 
 
 def check_history(base_url: str, token: str, timeout: int, verify_ssl: bool) -> None:
@@ -181,14 +193,112 @@ def check_history(base_url: str, token: str, timeout: int, verify_ssl: bool) -> 
     print(f"\n[INFO] 历史记录总数: {total}, 最近返回 {len(records)} 条")
     for i, item in enumerate(records, start=1):
         print(
-            f"  {i}. {item.get('imageUid')} | {item.get('shipModel')} | "
+            f"  {i}. {item.get('imageUid')} | {item.get('ship_model')} | "
             f"{item.get('timestamp')} | {item.get('imageFormat')}"
         )
+
+
+def fetch_history_records(
+    base_url: str,
+    token: str,
+    size: int,
+    timeout: int,
+    verify_ssl: bool,
+) -> list[dict]:
+    url = f"{base_url.rstrip('/')}/drone/image-history/list/"
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {"current": 1, "size": size}
+
+    try:
+        resp = requests.get(url, headers=headers, params=params, timeout=timeout, verify=verify_ssl)
+    except requests.RequestException as exc:
+        raise RuntimeError(f"拉取历史列表失败: {exc}") from exc
+
+    if resp.status_code != 200:
+        raise RuntimeError(f"拉取历史列表 HTTP {resp.status_code}: {resp.text}")
+
+    try:
+        body = resp.json()
+    except ValueError as exc:
+        raise RuntimeError(f"历史列表响应不是 JSON: {resp.text}") from exc
+
+    if body.get("code") != 200:
+        raise RuntimeError(
+            f"拉取历史列表业务失败 code={body.get('code')}, msg={body.get('msg')}"
+        )
+
+    return ((body.get("data") or {}).get("records") or [])
+
+
+def batch_delete_history(
+    base_url: str,
+    token: str,
+    ids: list[str],
+    timeout: int,
+    verify_ssl: bool,
+) -> tuple[bool, str]:
+    url = f"{base_url.rstrip('/')}/drone/image-history/batch-delete/"
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = {"ids": ids}
+
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=timeout, verify=verify_ssl)
+    except requests.RequestException as exc:
+        return False, f"批量删除请求失败: {exc}"
+
+    if resp.status_code != 200:
+        return False, f"批量删除 HTTP {resp.status_code}: {resp.text}"
+
+    try:
+        body = resp.json()
+    except ValueError:
+        return False, f"批量删除响应不是 JSON: {resp.text}"
+
+    if body.get("code") != 200:
+        return False, f"批量删除业务失败 code={body.get('code')}, msg={body.get('msg')}"
+
+    deleted = (body.get("data") or {}).get("deleted")
+    return True, f"deleted={deleted}"
+
+
+def batch_delete_history_by_uid_anonymous(
+    base_url: str,
+    image_uids: list[str],
+    timeout: int,
+    verify_ssl: bool,
+) -> tuple[bool, str]:
+    url = f"{base_url.rstrip('/')}/drone/image-history/batch-delete-by-uid/"
+    payload = {"imageUids": image_uids}
+
+    try:
+        resp = requests.post(url, json=payload, timeout=timeout, verify=verify_ssl)
+    except requests.RequestException as exc:
+        return False, f"匿名批量删除请求失败: {exc}"
+
+    if resp.status_code != 200:
+        return False, f"匿名批量删除 HTTP {resp.status_code}: {resp.text}"
+
+    try:
+        body = resp.json()
+    except ValueError:
+        return False, f"匿名批量删除响应不是 JSON: {resp.text}"
+
+    if body.get("code") != 200:
+        return False, f"匿名批量删除业务失败 code={body.get('code')}, msg={body.get('msg')}"
+
+    deleted = (body.get("data") or {}).get("deleted")
+    return True, f"deleted={deleted}"
 
 
 def main() -> int:
     args = parse_args()
     image_dir = Path(os.path.expanduser(args.image_dir)).resolve()
+
+    # 9001 is the TCP gateway port, not the HTTP upload API port.
+    if ":9001" in args.base_url:
+        print("[ERROR] --base-url 使用了 9001 端口。9001 是 TCP 网关端口，不是 HTTP 图片上传接口。")
+        print("[HINT] 请改为例如: https://yunpingtai.cc/api 或 http://127.0.0.1:8000/api")
+        return 1
 
     try:
         image_files = find_images(image_dir, args.recursive)
@@ -234,9 +344,10 @@ def main() -> int:
 
     ok_count = 0
     fail_count = 0
+    uploaded_uids: list[str] = []
 
     for idx, image_path in enumerate(image_files, start=1):
-        ok, msg = upload_one(
+        ok, msg, image_uid = upload_one(
             base_url=args.base_url,
             token=token,
             image_path=image_path,
@@ -246,6 +357,8 @@ def main() -> int:
         )
         if ok:
             ok_count += 1
+            if image_uid:
+                uploaded_uids.append(image_uid)
             print(f"[OK {idx}/{len(image_files)}] {image_path.name} -> {msg}")
         else:
             fail_count += 1
@@ -266,6 +379,59 @@ def main() -> int:
             timeout=args.timeout,
             verify_ssl=args.verify_ssl,
         )
+
+    if args.batch_delete:
+        if args.delete_count <= 0:
+            print("[ERROR] --delete-count 必须大于 0")
+            return 2
+
+        if token:
+            try:
+                records = fetch_history_records(
+                    base_url=args.base_url,
+                    token=token,
+                    size=args.delete_count,
+                    timeout=args.timeout,
+                    verify_ssl=args.verify_ssl,
+                )
+            except RuntimeError as exc:
+                print(f"[ERROR] {exc}")
+                return 2
+
+            ids = [str(item.get("id")) for item in records if item.get("id") is not None]
+            ids = ids[: args.delete_count]
+
+            if not ids:
+                print("[WARN] 没有可删除的历史记录")
+                return 0 if fail_count == 0 else 2
+
+            print(f"\n[INFO] 准备批量删除 {len(ids)} 条历史记录: {', '.join(ids)}")
+            ok, msg = batch_delete_history(
+                base_url=args.base_url,
+                token=token,
+                ids=ids,
+                timeout=args.timeout,
+                verify_ssl=args.verify_ssl,
+            )
+        else:
+            uids = uploaded_uids[: args.delete_count]
+            if not uids:
+                print("[WARN] 匿名模式没有可删除的 imageUid")
+                return 0 if fail_count == 0 else 2
+
+            print(f"\n[INFO] 匿名批量删除 {len(uids)} 条（按 imageUid）")
+            ok, msg = batch_delete_history_by_uid_anonymous(
+                base_url=args.base_url,
+                image_uids=uids,
+                timeout=args.timeout,
+                verify_ssl=args.verify_ssl,
+            )
+
+        if ok:
+            print(f"[OK] 批量删除成功 -> {msg}")
+        else:
+            print(f"[FAIL] 批量删除失败 -> {msg}")
+            return 2
 
     return 0 if fail_count == 0 else 2
 

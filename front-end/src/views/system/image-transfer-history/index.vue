@@ -121,7 +121,7 @@
         { type: 'selection', width: 50 },
         { type: 'index', width: 60, label: '序号' },
         { prop: 'id', label: 'ID', width: 90 },
-        { prop: 'shipModel', label: '型号', minWidth: 120 },
+        { prop: 'ship_model', label: '型号', minWidth: 120 },
         { prop: 'imageUid', label: '图片唯一标识', minWidth: 190 },
         { prop: 'timestamp', label: '时间戳', minWidth: 180 },
         {
