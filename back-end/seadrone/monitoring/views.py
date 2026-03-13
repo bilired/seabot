@@ -448,6 +448,7 @@ def device_locations(request):
     gateway_data = gateway_service.status()
     last_boat_packets = gateway_data.get('last_boat_packets') or {}
     reported_models = gateway_data.get('reported_models') or {}
+    online_ports = {str(port) for port in (gateway_data.get('online_ports') or [])}
 
     # Build online set by ship_model for dedup later
     locations: dict[str, dict] = {}
@@ -474,7 +475,7 @@ def device_locations(request):
                 'course': packet.get('course'),
                 'speed': packet.get('speed'),
                 'battery_level': packet.get('battery_level'),
-                'online': True,
+                'online': port_str in online_ports,
                 'source_port': port_str,
             }
 

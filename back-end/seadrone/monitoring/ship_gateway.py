@@ -328,7 +328,9 @@ class ShipGatewayService:
         self.host = host
         self.port_start = port_start
         self.ship_count = ship_count
-        self.online_grace_seconds = max(0.0, float(os.getenv('SHIP_ONLINE_GRACE_SECONDS', '8')))
+        # Keep device online for a short window after last packet/connection,
+        # which avoids online/offline flapping when devices use short TCP sessions.
+        self.online_grace_seconds = max(0.0, float(os.getenv('SHIP_ONLINE_GRACE_SECONDS', '30')))
         self.ship_port_model_map = load_ship_port_model_map()
         self.reported_ship_model_by_port: Dict[int, str] = {}
         self.last_boat_packet_by_port: Dict[int, dict] = {}
@@ -468,6 +470,12 @@ class ShipGatewayService:
                 continue
             except OSError:
                 break
+
+            with self._lock:
+                # Some devices connect-send-disconnect per packet. Record activity
+                # at accept time to smooth status polling between short sessions.
+                self.clients[port] = client
+                self.last_seen_by_port[port] = time.time()
 
             thread = threading.Thread(target=self._handle_client_connection, args=(client, port), daemon=True)
             thread.start()
