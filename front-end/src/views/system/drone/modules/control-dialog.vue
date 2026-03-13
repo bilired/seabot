@@ -15,7 +15,7 @@
         </div>
         <div class="video-player">
           <div v-if="streamUrl" class="video-wrapper">
-            <ArtAliyunVideoPlayer
+            <AliyunPlayer
               :key="playerKey"
               :player-id="`drone-player-${playerKey}`"
               :video-url="streamUrl"
@@ -170,7 +170,7 @@
 <script setup lang="ts">
   import { Icon } from '@iconify/vue'
   import { ElMessage } from 'element-plus'
-  import ArtAliyunVideoPlayer from '@/components/core/media/art-aliyun-video-player/index.vue'
+  import AliyunPlayer from '@/components/core/media/aliyun-player/index.vue'
   import { fetchShipGatewayStatus, sendShipAction, type ShipGatewayStatusData } from '@/api/drone'
 
   interface Props {

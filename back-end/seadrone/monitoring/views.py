@@ -319,6 +319,13 @@ def upload_video_stream_data(request):
             raw_payload=str(request.data.get('raw_payload') or request.data.get('rawPayload') or ''),
         )
 
+        # 保留最新150条，超出自动删除
+        total = VideoStreamTransferRecord.objects.count()
+        if total > 150:
+            # 按 collection_time 升序，删除最早的多余记录
+            to_delete = VideoStreamTransferRecord.objects.order_by('collection_time')[:total-150]
+            to_delete.delete()
+
         return Response({
             "code": 200,
             "msg": "视频流记录上传成功",
