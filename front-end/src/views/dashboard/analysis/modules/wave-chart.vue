@@ -322,9 +322,18 @@ const echartsOption = computed(() => ({
 
 <style scoped>
 .snapshot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 1rem }
-.snapshot-item { background: #fff; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 1px 6px rgba(0,0,0,0.06) }
-.snapshot-label { font-size: 12px; color: #6b6f73 }
-.snapshot-value { font-size: 28px; font-weight: 700; margin-top: 6px }
+.snapshot-item {
+  background: var(--art-main-bg-color);
+  border: 1px solid var(--el-border-color);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+}
+.snapshot-label { font-size: 12px; color: var(--el-text-color-secondary) }
+.snapshot-value { font-size: 28px; font-weight: 700; margin-top: 6px; color: var(--el-text-color-primary) }
 /* keep option buttons stable size so selection styling doesn't shrink them */
 .chart-option-btn {
   min-width: 120px !important;

@@ -188,9 +188,17 @@ export interface DeviceLocation {
   ship_model: string
   latitude: number
   longitude: number
+}
+
+export interface DeviceStatus {
+  ship_model: string
+  latitude: number
+  longitude: number
   course?: number | null
   speed?: number | null
   battery_level?: string | null
+  water_extraction?: string | null
+  boat_timestamp?: string | null
   online: boolean
   source_port?: string
   recorded_at?: string
@@ -199,6 +207,12 @@ export interface DeviceLocation {
 export function fetchDeviceLocations() {
   return request.get<DeviceLocation[]>({
     url: '/api/ship/device-locations/'
+  })
+}
+
+export function fetchDeviceStatus() {
+  return request.get<DeviceStatus[]>({
+    url: '/api/ship/device-status/'
   })
 }
 

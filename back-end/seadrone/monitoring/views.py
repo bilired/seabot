@@ -1,3 +1,7 @@
+import json
+import time
+
+from django.http import JsonResponse, StreamingHttpResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
@@ -426,24 +430,50 @@ def ship_gateway_start(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['GET'])
-@permission_classes([])
 def ship_gateway_status(request):
-    """查看TCP船舶网关服务状态"""
-    return Response({
-        "code": 200,
-        "msg": "获取成功",
-        "data": gateway_service.status()
-    }, status=status.HTTP_200_OK)
+    """查看TCP船舶网关服务状态（JSON）或实时流（SSE）。"""
+    wants_stream = request.GET.get('stream') == '1' or 'text/event-stream' in (request.META.get('HTTP_ACCEPT') or '')
+
+    if not wants_stream:
+        return JsonResponse({
+            "code": 200,
+            "msg": "获取成功",
+            "data": gateway_service.status()
+        }, status=status.HTTP_200_OK)
+
+    def _event_stream():
+        last_payload = None
+        keepalive_at = time.time()
+
+        try:
+            while True:
+                data = gateway_service.status()
+                payload = json.dumps(data, ensure_ascii=False, sort_keys=True)
+
+                if payload != last_payload:
+                    yield f"event: gateway-status\ndata: {payload}\n\n"
+                    last_payload = payload
+                    keepalive_at = time.time()
+
+                if time.time() - keepalive_at >= 15:
+                    yield ": keepalive\n\n"
+                    keepalive_at = time.time()
+
+                time.sleep(1)
+        except GeneratorExit:
+            return
+
+    response = StreamingHttpResponse(_event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    return response
 
 
-@api_view(['GET'])
-@permission_classes([])
-def device_locations(request):
-    """返回所有设备的当前/最后已知位置及在线状态。
+def _build_device_status() -> list[dict]:
+    """构建所有设备的状态数据（含位置 + 船体状态）。
 
-    在线设备：从 gateway 内存中实时取位置（online=true）。
-    离线设备：从 BoatTrackRecord 中取最后一条有效坐标（online=false）。
+    在线设备：从 gateway 内存中实时取状态。
+    离线设备：从 BoatTrackRecord 中取最后一条有效记录。
     """
     gateway_data = gateway_service.status()
     last_boat_packets = gateway_data.get('last_boat_packets') or {}
@@ -451,7 +481,7 @@ def device_locations(request):
     online_ports = {str(port) for port in (gateway_data.get('online_ports') or [])}
 
     # Build online set by ship_model for dedup later
-    locations: dict[str, dict] = {}
+    statuses: dict[str, dict] = {}
 
     for port_str, packet in last_boat_packets.items():
         lat = packet.get('latitude')
@@ -467,20 +497,22 @@ def device_locations(request):
 
         # If same model reported on multiple ports, prefer the freshest entry —
         # we keep the first hit here since gateway already tracks latest packet.
-        if model not in locations:
-            locations[model] = {
+        if model not in statuses:
+            statuses[model] = {
                 'ship_model': model,
                 'latitude': lat,
                 'longitude': lng,
                 'course': packet.get('course'),
                 'speed': packet.get('speed'),
                 'battery_level': packet.get('battery_level'),
+                'water_extraction': packet.get('water_extraction'),
+                'boat_timestamp': packet.get('boat_timestamp'),
                 'online': port_str in online_ports,
                 'source_port': port_str,
             }
 
     # Offline fallback: query DB for every distinct model not already online
-    online_models = set(locations.keys())
+    online_models = set(statuses.keys())
     offline_models = (
         BoatTrackRecord.objects
         .exclude(ship_model__in=online_models)
@@ -498,22 +530,126 @@ def device_locations(request):
             .first()
         )
         if last_rec:
-            locations[model] = {
+            statuses[model] = {
                 'ship_model': model,
                 'latitude': last_rec.latitude,
                 'longitude': last_rec.longitude,
                 'course': last_rec.course,
                 'speed': last_rec.speed,
                 'battery_level': last_rec.battery_level,
+                'water_extraction': last_rec.water_extraction,
+                'boat_timestamp': last_rec.boat_timestamp,
                 'online': False,
                 'recorded_at': timezone.localtime(last_rec.recorded_at).strftime('%Y-%m-%d %H:%M:%S'),
             }
 
-    return Response({
-        'code': 200,
-        'msg': '获取成功',
-        'data': list(locations.values()),
-    }, status=status.HTTP_200_OK)
+    return list(statuses.values())
+
+
+def _build_device_locations() -> list[dict]:
+    """构建纯位置数据（仅 ship_model + 经纬度）。"""
+    statuses = _build_device_status()
+    return [
+        {
+            'ship_model': item['ship_model'],
+            'latitude': item['latitude'],
+            'longitude': item['longitude'],
+        }
+        for item in statuses
+        if item.get('latitude') is not None and item.get('longitude') is not None
+    ]
+
+
+def device_locations(request):
+    """返回设备位置（仅位置字段，JSON 或 SSE）。
+
+    - 默认：普通 GET，返回 JSON
+    - 流式：携带 ?stream=1 或 Accept: text/event-stream
+    """
+
+    wants_stream = request.GET.get('stream') == '1' or 'text/event-stream' in (request.META.get('HTTP_ACCEPT') or '')
+
+    if not wants_stream:
+        return JsonResponse({
+            'code': 200,
+            'msg': '获取成功',
+            'data': _build_device_locations(),
+        }, status=status.HTTP_200_OK)
+
+    def _event_stream():
+        last_payload = None
+        keepalive_at = time.time()
+
+        try:
+            while True:
+                data = _build_device_locations()
+                payload = json.dumps(data, ensure_ascii=False, sort_keys=True)
+
+                # Only push when changed to avoid continuous HTTP polling behavior.
+                if payload != last_payload:
+                    yield f"event: locations\ndata: {payload}\n\n"
+                    last_payload = payload
+                    keepalive_at = time.time()
+
+                # Keep-alive comment to prevent proxy/timeouts on idle connections.
+                if time.time() - keepalive_at >= 15:
+                    yield ": keepalive\n\n"
+                    keepalive_at = time.time()
+
+                time.sleep(1)
+        except GeneratorExit:
+            # Client disconnected.
+            return
+
+    response = StreamingHttpResponse(_event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    return response
+
+
+def device_status(request):
+    """返回设备状态（JSON）或实时流（SSE）。
+
+    状态字段包含：
+    ship_model, latitude, longitude, course, speed, battery_level,
+    water_extraction, online, source_port, recorded_at
+    """
+
+    wants_stream = request.GET.get('stream') == '1' or 'text/event-stream' in (request.META.get('HTTP_ACCEPT') or '')
+
+    if not wants_stream:
+        return JsonResponse({
+            'code': 200,
+            'msg': '获取成功',
+            'data': _build_device_status(),
+        }, status=status.HTTP_200_OK)
+
+    def _event_stream():
+        last_payload = None
+        keepalive_at = time.time()
+
+        try:
+            while True:
+                data = _build_device_status()
+                payload = json.dumps(data, ensure_ascii=False, sort_keys=True)
+
+                if payload != last_payload:
+                    yield f"event: device-status\ndata: {payload}\n\n"
+                    last_payload = payload
+                    keepalive_at = time.time()
+
+                if time.time() - keepalive_at >= 15:
+                    yield ": keepalive\n\n"
+                    keepalive_at = time.time()
+
+                time.sleep(1)
+        except GeneratorExit:
+            return
+
+    response = StreamingHttpResponse(_event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    return response
 
 
 @api_view(['POST'])

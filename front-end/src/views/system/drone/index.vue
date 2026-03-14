@@ -119,7 +119,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, onMounted, h } from 'vue'
+  import { ref, onMounted, onBeforeUnmount, h } from 'vue'
   import ArtButtonTable from '@/components/core/forms/art-button-table/index.vue'
   import { useTable } from '@/hooks/core/useTable'
   import type { ColumnOption } from '@/types/component'
@@ -127,7 +127,16 @@
   import type { UploadAjaxError } from 'element-plus/es/components/upload/src/ajax'
   import { ElTag, ElButton, ElSpace, ElMessage, ElMessageBox, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElUpload } from 'element-plus'
   import { Icon } from '@iconify/vue'
-  import { fetchDroneList, batchDeleteDrone, createDrone, updateDrone, uploadDroneImage, type DroneItem } from '@/api/drone'
+  import {
+    fetchDroneList,
+    batchDeleteDrone,
+    createDrone,
+    updateDrone,
+    uploadDroneImage,
+    fetchDeviceStatus,
+    type DeviceStatus,
+    type DroneItem
+  } from '@/api/drone'
   import ControlDialog from './modules/control-dialog.vue'
   import TrackDialog from './modules/track-dialog.vue'
   import DeviceDetailModal from '@/views/dashboard/console/modules/device-detail.vue'
@@ -181,6 +190,29 @@
     online: { type: 'success' as const, text: '在线' },
     offline: { type: 'danger' as const, text: '离线' }
   } as const
+
+  const latestDeviceStatuses = ref<DeviceStatus[]>([])
+  let deviceStatusStream: EventSource | null = null
+
+  const normalizeModel = (value?: string) => (value || '').trim().toLowerCase()
+
+  const matchDeviceStatus = (rowModel?: string) => {
+    const model = normalizeModel(rowModel)
+    if (!model) return null
+
+    return latestDeviceStatuses.value.find((item) => {
+      const shipModel = normalizeModel(item.ship_model)
+      return shipModel === model || shipModel.includes(model) || model.includes(shipModel)
+    }) || null
+  }
+
+  const applyRealtimeStatuses = () => {
+    const rows = data.value as DroneItem[]
+    rows.forEach((row) => {
+      const matched = matchDeviceStatus(row.model)
+      row.status = matched?.online ? 'online' : 'offline'
+    })
+  }
 
   /**
    * 获取设备状态配置
@@ -312,8 +344,52 @@
             ])
         }
       ]) as any
+    },
+    hooks: {
+      onSuccess: () => {
+        applyRealtimeStatuses()
+      },
+      onCacheHit: () => {
+        applyRealtimeStatuses()
+      }
     }
   })
+
+  const initRealtimeStatuses = async () => {
+    try {
+      const statuses = await fetchDeviceStatus()
+      latestDeviceStatuses.value = Array.isArray(statuses) ? statuses : []
+      applyRealtimeStatuses()
+    } catch (error) {
+      console.error('加载实时设备状态失败:', error)
+    }
+  }
+
+  const startDeviceStatusStream = () => {
+    if (deviceStatusStream) {
+      deviceStatusStream.close()
+      deviceStatusStream = null
+    }
+
+    deviceStatusStream = new EventSource('/api/ship/device-status/?stream=1')
+
+    deviceStatusStream.addEventListener('device-status', (evt: Event) => {
+      const msg = evt as MessageEvent
+      try {
+        const statuses = JSON.parse(msg.data)
+        if (Array.isArray(statuses)) {
+          latestDeviceStatuses.value = statuses as DeviceStatus[]
+          applyRealtimeStatuses()
+        }
+      } catch (error) {
+        console.warn('解析实时设备状态失败:', error)
+      }
+    })
+
+    deviceStatusStream.onerror = () => {
+      // EventSource 会自动重连，这里不提示避免噪音。
+    }
+  }
 
   /**
    * 处理选择改变
@@ -515,6 +591,15 @@
   // 初始加载数据
   onMounted(() => {
     getData()
+    void initRealtimeStatuses()
+    startDeviceStatusStream()
+  })
+
+  onBeforeUnmount(() => {
+    if (deviceStatusStream) {
+      deviceStatusStream.close()
+      deviceStatusStream = null
+    }
   })
 </script>
 

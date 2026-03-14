@@ -124,7 +124,7 @@
 
   let map: mapboxgl.Map | null = null
   let markers: mapboxgl.Marker[] = []
-  let pollingTimer: number | null = null
+  let gatewayStream: EventSource | null = null
   let playbackTimer: number | null = null
   let fittedDate = ''
 
@@ -267,7 +267,7 @@
         }
 
         await pollTrack()
-        startPolling()
+        startGatewayStream()
       })
     } catch (error) {
       console.error('地图初始化失败:', error)
@@ -357,17 +357,31 @@
     drawTrack()
   }
 
-  const startPolling = () => {
-    if (pollingTimer) clearInterval(pollingTimer)
-    pollingTimer = window.setInterval(() => {
-      pollTrack()
-    }, 3000)
+  const startGatewayStream = () => {
+    if (gatewayStream) {
+      gatewayStream.close()
+      gatewayStream = null
+    }
+
+    gatewayStream = new EventSource('/api/ship/gateway/status/?stream=1')
+    gatewayStream.addEventListener('gateway-status', (evt: Event) => {
+      const msg = evt as MessageEvent
+      try {
+        const status = JSON.parse(msg.data)
+        void pollTrack(status)
+      } catch (error) {
+        console.warn('解析网关状态流失败:', error)
+      }
+    })
+    gatewayStream.onerror = () => {
+      // EventSource will auto-reconnect by default.
+    }
   }
 
-  const stopPolling = () => {
-    if (pollingTimer) {
-      clearInterval(pollingTimer)
-      pollingTimer = null
+  const stopGatewayStream = () => {
+    if (gatewayStream) {
+      gatewayStream.close()
+      gatewayStream = null
     }
   }
 
@@ -404,8 +418,8 @@
     drawTrack()
   }
 
-  const pollTrack = async () => {
-    const status = await fetchShipGatewayStatus()
+  const pollTrack = async (statusPayload?: Awaited<ReturnType<typeof fetchShipGatewayStatus>>) => {
+    const status = statusPayload ?? (await fetchShipGatewayStatus())
     const packets = status?.last_boat_packets || {}
     const packet = Object.values(packets).find((item) => {
       if (deviceModel.value) {
@@ -506,7 +520,7 @@
       })
     } else {
       stopPlayback()
-      stopPolling()
+      stopGatewayStream()
       if (map) {
         map.remove()
         map = null
@@ -525,7 +539,7 @@
 
   onUnmounted(() => {
     stopPlayback()
-    stopPolling()
+    stopGatewayStream()
     if (map) {
       map.remove()
       map = null

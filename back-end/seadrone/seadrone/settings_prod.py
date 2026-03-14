@@ -46,20 +46,26 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # ===== 2. 数据库配置 =====
-# 使用 MySQL 8.0（通过宝塔面板创建）
+# 默认使用 TCP 连接本机 MySQL，避免 localhost 走 socket 导致路径不一致。
+db_options = {
+    'charset': 'utf8mb4',
+    'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+    'connect_timeout': 10,
+}
+
+db_socket = os.environ.get('DB_SOCKET', '').strip()
+if db_socket:
+    db_options['unix_socket'] = db_socket
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'seaboat_prod',
-        'USER': 'seaboat_user',
+        'ENGINE': os.environ.get('DB_ENGINE', 'django.db.backends.mysql'),
+        'NAME': os.environ.get('DB_NAME', 'seaboat_prod'),
+        'USER': os.environ.get('DB_USER', 'seaboat_user'),
         'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': 'localhost',
-        'PORT': '3306',
-        'OPTIONS': {
-            'charset': 'utf8mb4',
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            'connect_timeout': 10,
-        },
+        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('DB_PORT', '3306'),
+        'OPTIONS': db_options,
         'CONN_MAX_AGE': 600,  # 连接池超时 10 分钟
     }
 }

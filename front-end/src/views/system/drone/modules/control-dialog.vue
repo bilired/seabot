@@ -208,6 +208,7 @@
   const gatewayStatus = ref<ShipGatewayStatusData | null>(null)
   const gatewayLoading = ref(false)
   const gatewayError = ref('')
+  let gatewayStream: EventSource | null = null
 
   const streamUrl = computed(() => props.deviceData?.streamUrl || '')
   const gatewayRunning = computed(() => Boolean(gatewayStatus.value?.running))
@@ -287,7 +288,34 @@
 
   // 定时器
   let timer: ReturnType<typeof setInterval> | null = null
-  let gatewayTimer: ReturnType<typeof setInterval> | null = null
+
+  const startGatewayStream = () => {
+    if (gatewayStream) {
+      gatewayStream.close()
+      gatewayStream = null
+    }
+
+    gatewayStream = new EventSource('/api/ship/gateway/status/?stream=1')
+    gatewayStream.addEventListener('gateway-status', (evt: Event) => {
+      const msg = evt as MessageEvent
+      try {
+        gatewayStatus.value = JSON.parse(msg.data) as ShipGatewayStatusData
+        gatewayError.value = ''
+      } catch (error) {
+        console.warn('解析网关状态流失败:', error)
+      }
+    })
+    gatewayStream.onerror = () => {
+      gatewayError.value = '网关状态监听中断，正在重连'
+    }
+  }
+
+  const stopGatewayStream = () => {
+    if (gatewayStream) {
+      gatewayStream.close()
+      gatewayStream = null
+    }
+  }
 
   // 刷新视频流
   const refreshStream = () => {
@@ -375,18 +403,13 @@
       playerKey.value += 1
       timer = setInterval(updateTime, 1000)
       void loadGatewayStatus()
-      gatewayTimer = setInterval(() => {
-        void loadGatewayStatus()
-      }, 3000)
+      startGatewayStream()
     } else {
       if (timer) {
         clearInterval(timer)
         timer = null
       }
-      if (gatewayTimer) {
-        clearInterval(gatewayTimer)
-        gatewayTimer = null
-      }
+      stopGatewayStream()
     }
   })
 
@@ -395,9 +418,7 @@
     if (timer) {
       clearInterval(timer)
     }
-    if (gatewayTimer) {
-      clearInterval(gatewayTimer)
-    }
+    stopGatewayStream()
   })
 </script>
 

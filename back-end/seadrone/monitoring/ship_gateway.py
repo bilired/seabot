@@ -330,7 +330,7 @@ class ShipGatewayService:
         self.ship_count = ship_count
         # Keep device online for a short window after last packet/connection,
         # which avoids online/offline flapping when devices use short TCP sessions.
-        self.online_grace_seconds = max(0.0, float(os.getenv('SHIP_ONLINE_GRACE_SECONDS', '30')))
+        self.online_grace_seconds = max(0.0, float(os.getenv('SHIP_ONLINE_GRACE_SECONDS', '5')))
         self.ship_port_model_map = load_ship_port_model_map()
         self.reported_ship_model_by_port: Dict[int, str] = {}
         self.last_boat_packet_by_port: Dict[int, dict] = {}
@@ -525,27 +525,53 @@ class ShipGatewayService:
             return parts[0].strip()
         return ''
 
+    def _canonical_ship_port(self, ship_port: int) -> int:
+        # Each ship uses two adjacent ports; use the odd port as the canonical ship port.
+        return ship_port - 1 if ship_port % 2 == 0 else ship_port
+
     def _resolve_ship_model(self, ship_port: int) -> str:
+        canonical_port = self._canonical_ship_port(ship_port)
+        candidate_ports = [ship_port, canonical_port, canonical_port + 1]
+
         with self._lock:
-            reported = self.reported_ship_model_by_port.get(ship_port)
-        if reported:
-            return reported
-        return self.ship_port_model_map.get(str(ship_port), str(ship_port))
+            for port in candidate_ports:
+                reported = self.reported_ship_model_by_port.get(port)
+                if reported:
+                    return reported
+
+        for port in candidate_ports:
+            mapped = self.ship_port_model_map.get(str(port))
+            if mapped:
+                return mapped
+
+        return str(canonical_port)
 
     def _persist_packets(self, ship_port: int, packets: List[dict]) -> None:
+        canonical_ship_port = self._canonical_ship_port(ship_port)
+
         for packet in packets:
             if packet['packet_type'] != 'B':
                 continue
             try:
                 boat_payload = parse_boat_payload(packet['payload_text'])
                 reported = boat_payload['ship_model']
+            except Exception as exc:
+                logger.warning('Parse boat packet failed on port %s: %s', ship_port, exc)
+                continue
 
-                latitude = boat_payload.get('latitude')
-                longitude = boat_payload.get('longitude')
-                if latitude is not None and longitude is not None:
+            # 先更新内存状态，无论 DB 写入是否成功都能反映实时数据
+            with self._lock:
+                self.reported_ship_model_by_port[canonical_ship_port] = reported
+                self.reported_ship_model_by_port[canonical_ship_port + 1] = reported
+                self.last_boat_packet_by_port[ship_port] = boat_payload
+
+            latitude = boat_payload.get('latitude')
+            longitude = boat_payload.get('longitude')
+            if latitude is not None and longitude is not None:
+                try:
                     BoatTrackRecord.objects.create(
                         ship_model=reported,
-                        ship_port=ship_port,
+                        ship_port=canonical_ship_port,
                         boat_timestamp=boat_payload.get('boat_timestamp'),
                         device_time=_parse_boat_device_time(boat_payload.get('boat_timestamp')),
                         latitude=latitude,
@@ -555,12 +581,8 @@ class ShipGatewayService:
                         battery_level=boat_payload.get('battery_level'),
                         water_extraction=boat_payload.get('water_extraction'),
                     )
-
-                with self._lock:
-                    self.reported_ship_model_by_port[ship_port] = reported
-                    self.last_boat_packet_by_port[ship_port] = boat_payload
-            except Exception as exc:
-                logger.warning('Parse boat packet failed on port %s: %s', ship_port, exc)
+                except Exception as exc:
+                    logger.warning('Save BoatTrackRecord failed on port %s: %s', ship_port, exc)
 
         ship_model = self._resolve_ship_model(ship_port)
         for packet in packets:

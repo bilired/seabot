@@ -764,8 +764,17 @@ class DashboardStatsView(APIView):
             from datetime import datetime, timedelta
             from django.utils import timezone
             
-            # 统计在线设备数（仅当前用户）
-            online_devices = DroneDevice.objects.filter(owner=request.user, status='online').count()
+            # 统计在线设备数：以 TCP 网关实际连接的船型数量为准
+            from monitoring.ship_gateway import gateway_service
+            gateway_status = gateway_service.status()
+            last_boat_packets = gateway_status.get('last_boat_packets') or {}
+            online_ports_set = {str(p) for p in (gateway_status.get('online_ports') or [])}
+            online_models = {
+                pkt.get('ship_model') or f'船体-{port}'
+                for port, pkt in last_boat_packets.items()
+                if str(port) in online_ports_set and (pkt.get('latitude') is not None)
+            }
+            online_devices = len(online_models)
             
             # 计算系统运行时长（从当前用户的第一个设备创建时间或用户注册时间开始计算）
             first_device = DroneDevice.objects.filter(owner=request.user).order_by('created_at').first()

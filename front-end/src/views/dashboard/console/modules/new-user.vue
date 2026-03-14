@@ -19,8 +19,8 @@
 <script setup lang="ts">
   import { ElMessage } from 'element-plus'
   import mapboxgl from 'mapbox-gl'
-  import type { DeviceLocation } from '@/api/drone'
-  import { fetchDeviceLocations } from '@/api/drone'
+  import type { DeviceStatus } from '@/api/drone'
+  import { fetchDeviceStatus } from '@/api/drone'
 
   const MAPBOX_TOKEN =
     import.meta.env.VITE_MAPBOX_TOKEN ||
@@ -31,11 +31,11 @@
   let map: mapboxgl.Map | null = null
   // key = ship_model
   const markers = new Map<string, mapboxgl.Marker>()
-  let pollingTimer: number | null = null
+  let locationStream: EventSource | null = null
   let initialFitDone = false
 
   /** Resolve marker color by model + online status */
-  function markerColor(loc: DeviceLocation): string {
+  function markerColor(loc: DeviceStatus): string {
     if (!loc.online) return '#888888'
     const m = (loc.ship_model || '').toUpperCase()
     if (m.includes('DL-3022')) return '#e53e3e'
@@ -43,7 +43,7 @@
     return '#1890ff'
   }
 
-  function buildMarkerEl(loc: DeviceLocation): HTMLElement {
+  function buildMarkerEl(loc: DeviceStatus): HTMLElement {
     const color = markerColor(loc)
     const el = document.createElement('div')
     el.className = 'ship-marker'
@@ -58,7 +58,7 @@
     return el
   }
 
-  function buildPopup(loc: DeviceLocation): mapboxgl.Popup {
+  function buildPopup(loc: DeviceStatus): mapboxgl.Popup {
     const statusLabel = loc.online
       ? '<span style="color:#68d391">● 在线</span>'
       : `<span style="color:#aaa">● 离线（最后位置 ${loc.recorded_at ?? ''}）</span>`
@@ -86,8 +86,8 @@
         map = new mapboxgl.Map({
           container: mapContainer.value,
           style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-          center: [114.3, 30.5],
-          zoom: 10,
+          center: [118.132857, 24.555872],
+          zoom: 9,
           pitch: 0,
           bearing: 0
         })
@@ -97,7 +97,7 @@
 
         map.on('load', async () => {
           await refreshBoatMarkers()
-          startPolling()
+          startLocationStream()
         })
       } catch (error) {
         console.error('地图初始化失败:', error)
@@ -107,9 +107,9 @@
   })
 
   onBeforeUnmount(() => {
-    if (pollingTimer) {
-      clearInterval(pollingTimer)
-      pollingTimer = null
+    if (locationStream) {
+      locationStream.close()
+      locationStream = null
     }
     markers.forEach((marker) => marker.remove())
     markers.clear()
@@ -118,23 +118,47 @@
     }
   })
 
-  const startPolling = () => {
-    if (pollingTimer) clearInterval(pollingTimer)
-    pollingTimer = window.setInterval(() => {
-      refreshBoatMarkers()
-    }, 3000)
+  const startLocationStream = () => {
+    if (locationStream) {
+      locationStream.close()
+      locationStream = null
+    }
+
+    locationStream = new EventSource('/api/ship/device-status/?stream=1')
+
+    locationStream.addEventListener('device-status', (evt: Event) => {
+      const msg = evt as MessageEvent
+      try {
+        const locations = JSON.parse(msg.data)
+        if (Array.isArray(locations)) {
+          applyBoatMarkers(locations)
+        }
+      } catch (error) {
+        console.warn('解析设备位置流失败:', error)
+      }
+    })
+
+    locationStream.onerror = () => {
+      // EventSource will auto-reconnect by default; keep it quiet to avoid noisy toasts.
+    }
   }
 
   const refreshBoatMarkers = async () => {
     if (!map) return
 
-    let locations: DeviceLocation[] = []
+    let locations: DeviceStatus[] = []
     try {
-      const res = await fetchDeviceLocations()
+      const res = await fetchDeviceStatus()
       locations = Array.isArray(res) ? res : ((res as any)?.data ?? [])
     } catch {
       return
     }
+
+    applyBoatMarkers(locations)
+  }
+
+  const applyBoatMarkers = (locations: DeviceStatus[]) => {
+    if (!map) return
 
     const activeModels = new Set<string>()
     const points: [number, number][] = []
