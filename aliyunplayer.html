@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="x-ua-compatible" content="IE=edge" >
+<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no"/>
+<title>阿里云真实直播播放器</title>
+<!-- 播放器样式文件（保持最新版本） -->
+<link rel="stylesheet" href="https://g.alicdn.com/apsara-media-box/imp-web-player/2.36.1/skins/default/aliplayer-min.css" />
+<!-- 播放器核心JS（保持最新版本） -->
+<script type="text/javascript" charset="utf-8" src="https://g.alicdn.com/apsara-media-box/imp-web-player/2.36.1/aliplayer-min.js"></script>
+</head>
+<body>
+<!-- 播放器容器 -->
+<div class="prism-player" id="player-con"></div>
+
+<script>
+// 初始化播放器
+var player = new Aliplayer({
+  "id": "player-con", // 容器ID，和上面的div对应
+  // 1. 替换为你的真实直播播放地址（核心修改点1）
+  "source": "请输入真实播放流地址", 
+  "width": "100%", // 播放器宽度，保持100%适配页面
+  "height": "500px", // 高度可根据需求调整（比如600px/100vh）
+  "autoplay": true, // 自动播放（浏览器需允许自动播放，静音下更易生效）
+  "muted": true, // 建议开启静音，解决大部分浏览器自动播放失败问题
+  "isLive": true, // 直播场景必须设为true（核心）
+  "isVBR": true, // 直播一般是可变码率，保持true
+  // 2. H.265播放必须开启（核心修改点2）
+  "enableH265": true,
+  "extraInfo": {
+    "crossOrigin": "anonymous" // 跨域配置，保持即可
+  },
+   "flvConfig": {
+    "cors": true,
+    "withCredentials": false
+  },
+  // 播放器控件布局（可按需删减，比如保留基础播放/全屏/音量）
+  "skinLayout": [
+    {"name":"bigPlayButton","align":"blabs","x":30,"y":80},
+    {"name":"errorDisplay","align":"tlabs","x":0,"y":0},
+    {"name":"infoDisplay"},
+    {"name":"controlBar","align":"blabs","x":0,"y":0,"children":[
+      {"name":"liveDisplay","align":"tlabs","x":15,"y":6}, // 直播标识
+      {"name":"fullScreenButton","align":"tr","x":10,"y":10}, // 全屏按钮
+      {"name":"setting","align":"tr","x":15,"y":12}, // 设置（清晰度/倍速）
+      {"name":"volume","align":"tr","x":5,"y":10}, // 音量
+      {"name":"snapshot","align":"tr","x":10,"y":12} // 截图按钮
+    ]}
+  ],
+  // 水印（可选，可关闭：enable: false）
+  "watermark": {
+    "enable": false,
+    "text": "无人船管理系统", // 水印文字，替换为你的品牌/昵称
+    "mode": "GHOST" // 水印模式：GHOST（半透明）/SOLID（实心）
+  },
+  // 3. 替换为你的真实License信息（核心修改点3）
+  "license": {
+    "key": "SPGV6VIaQ5weoF2DM9ed29bbf379e4f3b96a83829c79aba0a", // 从阿里云控制台复制
+    "domain": "yunpingtai.cc" // 比如：www.yourdomain.com（无http/https）
+  }
+}, function (player) {
+    console.log("播放器初始化成功");
+    // 可选：监听播放错误，方便排查问题
+    player.on('error', function(err) {
+      console.error("播放出错：", err);
+    });
+  }
+);
+
+// 截图功能（保持不变，点击截图按钮触发）
+player.on('snapshoted', function (data) {
+  var pictureData = data.paramData.base64
+  var downloadElement = document.createElement('a')
+  downloadElement.setAttribute('href', pictureData)
+  var fileName = '直播截图_' + Date.now() + '.png'
+  downloadElement.setAttribute('download', fileName)
+  downloadElement.click()
+  pictureData = null
+})
+</script>
+</body>
+</html>

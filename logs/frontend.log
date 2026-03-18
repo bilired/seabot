@@ -1,0 +1,46 @@
+
+> art-design-pro@0.0.0 dev
+> vite --open --host 0.0.0.0 --port 3006
+
+🚀 API_URL = /
+🚀 VERSION = 3.0.1
+
+  VITE v7.3.1  ready in 2314 ms
+
+  ➜  Local:   http://localhost:3006/
+  ➜  Network: http://192.168.2.6:3006/
+  ➜  Network: http://198.18.0.1:3006/
+  ➜  Network: http://10.211.55.2:3006/
+  ➜  Network: http://10.37.129.2:3006/
+  ➜  Vue DevTools: Open http://localhost:3006/__devtools__/ as a separate window
+  ➜  Vue DevTools: Press Option(⌥)+Shift(⇧)+D in App to toggle the Vue DevTools
+1:50:50 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+1:50:51 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+[1m[33m[@vue/compiler-sfc][0m[33m ::v-deep usage as a combinator has been deprecated. Use :deep(<inner-selector>) instead of ::v-deep <inner-selector>.[0m
+
+2:54:06 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+2:54:10 AM [vite] (client) page reload src/api/auth.ts
+2:54:19 AM [vite] (client) page reload src/api/auth.ts
+2:54:19 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+2:54:30 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+2:54:32 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+2:54:40 AM [vite] (client) page reload src/locales/langs/zh.json
+2:54:40 AM [vite] (client) page reload src/locales/langs/zh.json
+2:54:49 AM [vite] (client) page reload src/locales/langs/en.json
+2:55:09 AM [vite] (client) page reload src/locales/langs/zh.json
+2:55:09 AM [vite] (client) page reload src/locales/langs/en.json
+3:13:06 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+3:13:06 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+3:13:07 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+3:23:54 AM [vite] (client) hmr update /src/views/auth/register/index.vue, /src/assets/styles/core/tailwind.css
+3:24:15 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+3:24:33 AM [vite] (client) hmr update /src/views/auth/register/index.vue, /src/assets/styles/core/tailwind.css
+3:24:33 AM [vite] (client) page reload src/locales/langs/zh.json
+3:24:34 AM [vite] (client) page reload src/locales/langs/en.json
+3:27:03 AM [vite] (client) page reload src/locales/langs/zh.json
+3:27:03 AM [vite] (client) page reload src/locales/langs/en.json
+3:27:03 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+3:32:48 AM [vite] (client) hmr update /src/views/auth/register/index.vue, /src/assets/styles/core/tailwind.css
+3:33:06 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css
+3:34:50 AM [vite] (client) hmr update /src/components/core/layouts/art-page-content/index.vue, /src/assets/styles/core/tailwind.css
+3:35:12 AM [vite] (client) hmr update /src/assets/styles/core/tailwind.css

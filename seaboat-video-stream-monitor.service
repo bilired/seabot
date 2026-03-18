@@ -1,0 +1,20 @@
+[Unit]
+Description=SeaBoat Video Stream Monitor
+After=network.target mysqld.service seaboat-gunicorn.service
+
+[Service]
+Type=simple
+User=www
+Group=www
+WorkingDirectory=/www/wwwroot/seabot/back-end/seadrone
+Environment="PATH=/www/wwwroot/seabot/venv/bin"
+Environment="DJANGO_SETTINGS_MODULE=seadrone.settings_prod"
+Environment="PROJECT_ROOT=/www/wwwroot/seabot"
+Environment="VIDEO_STREAM_MONITOR_ACTIVE_PULL=1"
+EnvironmentFile=/www/wwwroot/seabot/.env
+ExecStart=/www/wwwroot/seabot/venv/bin/python manage.py run_video_stream_monitor --status-interval 30
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

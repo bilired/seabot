@@ -1,0 +1,343 @@
+Watching for file changes with StatReloader
+[03/Mar/2026 17:50:56] "POST /api/login/ HTTP/1.1" 200 534
+[03/Mar/2026 17:50:56] "GET /api/user/info/ HTTP/1.1" 200 130
+[03/Mar/2026 17:50:59] "GET /api/dashboard/stats/ HTTP/1.1" 200 166
+[03/Mar/2026 17:50:59] "GET /api/drone/list/?current=1&size=100 HTTP/1.1" 200 88
+[03/Mar/2026 17:50:59] "GET /api/dashboard/activity/?limit=8 HTTP/1.1" 200 276
+[03/Mar/2026 17:50:59] "GET /api/dashboard/sales/ HTTP/1.1" 200 409
+[03/Mar/2026 17:51:11] "POST /api/login/ HTTP/1.1" 200 534
+[03/Mar/2026 17:51:11] "GET /api/user/info/ HTTP/1.1" 200 205
+[03/Mar/2026 17:51:11] "GET /api/dashboard/stats/ HTTP/1.1" 200 167
+[03/Mar/2026 17:51:11] "GET /api/drone/list/?current=1&size=100 HTTP/1.1" 200 742
+[03/Mar/2026 17:51:11] "GET /api/dashboard/sales/ HTTP/1.1" 200 409
+[03/Mar/2026 17:51:11] "GET /api/dashboard/activity/?limit=8 HTTP/1.1" 200 986
+[03/Mar/2026 18:06:33] "GET /api/drone/list/?current=1&size=10 HTTP/1.1" 200 741
+[03/Mar/2026 18:06:33] "GET /api/drone/list/?current=1&size=10 HTTP/1.1" 200 741
+[03/Mar/2026 18:06:33] "GET /media/drone/6b0318ad2f4d4b81887eb694e41abd1d.jpeg HTTP/1.1" 200 10033
+[03/Mar/2026 18:06:33] "GET /media/drone/444b35ec50cc465bb37271a5d9e24f49.jpg HTTP/1.1" 200 46442
+[03/Mar/2026 18:06:34] "GET /api/user/list/?current=1&size=20&status=1 HTTP/1.1" 200 1720
+[03/Mar/2026 18:06:35] "GET /api/analysis/water-quality/ HTTP/1.1" 200 1042
+[03/Mar/2026 18:06:35] "GET /api/analysis/nutrient/ HTTP/1.1" 200 1489
+[03/Mar/2026 18:06:36] "GET /api/dashboard/sales/ HTTP/1.1" 200 409
+[03/Mar/2026 18:06:36] "GET /api/dashboard/stats/ HTTP/1.1" 200 167
+[03/Mar/2026 18:06:36] "GET /api/dashboard/activity/?limit=8 HTTP/1.1" 200 986
+[03/Mar/2026 18:06:36] "GET /api/drone/list/?current=1&size=100 HTTP/1.1" 200 742
+[03/Mar/2026 18:06:36] "GET /api/analysis/water-quality/ HTTP/1.1" 200 1042
+[03/Mar/2026 18:06:36] "GET /api/analysis/nutrient/ HTTP/1.1" 200 1489
+[03/Mar/2026 18:06:38] "GET /api/user/info/ HTTP/1.1" 200 205
+[03/Mar/2026 18:06:38] "GET /api/user/list/?current=1&size=20&status=1 HTTP/1.1" 200 1720
+[03/Mar/2026 18:06:39] "GET /api/drone/list/?current=1&size=10 HTTP/1.1" 200 741
+[03/Mar/2026 18:06:39] "GET /api/drone/list/?current=1&size=10 HTTP/1.1" 200 741
+[03/Mar/2026 18:06:40] "GET /api/analysis/water-quality/ HTTP/1.1" 200 1042
+[03/Mar/2026 18:06:40] "GET /api/analysis/nutrient/ HTTP/1.1" 200 1489
+[03/Mar/2026 18:06:40] "GET /api/dashboard/activity/?limit=8 HTTP/1.1" 200 986
+[03/Mar/2026 18:06:40] "GET /api/drone/list/?current=1&size=100 HTTP/1.1" 200 742
+[03/Mar/2026 18:06:40] "GET /api/dashboard/stats/ HTTP/1.1" 200 167
+[03/Mar/2026 18:06:40] "GET /api/dashboard/sales/ HTTP/1.1" 200 409
+/Volumes/disk/seabot/back-end/seadrone/accounts/models.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 17:50:47
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/models.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 18:53:10
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 1 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): accounts.
+Run 'python manage.py migrate' to apply them.
+March 03, 2026 - 18:53:45
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/urls.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 1 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): accounts.
+Run 'python manage.py migrate' to apply them.
+March 03, 2026 - 18:53:56
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+Unauthorized: /api/user/info/
+[03/Mar/2026 18:54:11] "GET /api/user/info/ HTTP/1.1" 401 172
+/Volumes/disk/seabot/back-end/seadrone/accounts/views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 1 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): accounts.
+Run 'python manage.py migrate' to apply them.
+March 03, 2026 - 18:53:59
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 1 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): accounts.
+Run 'python manage.py migrate' to apply them.
+March 03, 2026 - 18:54:21
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 1 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): accounts.
+Run 'python manage.py migrate' to apply them.
+March 03, 2026 - 18:54:54
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 1 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): accounts.
+Run 'python manage.py migrate' to apply them.
+March 03, 2026 - 18:55:09
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 1 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): accounts.
+Run 'python manage.py migrate' to apply them.
+March 03, 2026 - 18:56:05
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 1 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): accounts.
+Run 'python manage.py migrate' to apply them.
+March 03, 2026 - 18:56:07
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 1 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): accounts.
+Run 'python manage.py migrate' to apply them.
+March 03, 2026 - 18:57:04
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+[03/Mar/2026 18:59:46] "POST /api/register/sms/send/ HTTP/1.1" 200 98
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 18:58:07
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 19:00:39
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 19:01:22
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 19:05:53
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+[03/Mar/2026 19:07:40] "POST /api/register/sms/send/ HTTP/1.1" 200 139
+/Volumes/disk/seabot/back-end/seadrone/seadrone/settings.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 19:06:14
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/seadrone/settings.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 19:08:28
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 19:09:03
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 19:14:40
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 19:15:51
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/sms_verify/service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 19:17:58
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 19:18:21
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
+/Volumes/disk/seabot/back-end/seadrone/accounts/views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+March 03, 2026 - 19:28:40
+Django version 5.2.10, using settings 'seadrone.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+Watching for file changes with StatReloader
